@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Ashfall Gunmetal — theme tokens (RGB channel triplets).
+ * :root  = "Bunker" (dark, the default — this is an armory, after all)
+ * .light = "Daylight Patrol" (concrete daylight remap of the same tokens)
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --c-steel-950: 10 13 16;
+  --c-steel-900: 15 19 24;
+  --c-steel-850: 20 26 32;
+  --c-steel-800: 26 33 41;
+  --c-steel-700: 36 46 56;
+  --c-steel-600: 48 61 74;
+  --c-rivet: 58 72 88;
+
+  --c-bone: 232 228 218;
+  --c-bone-soft: 178 178 168;
+  --c-bone-faint: 128 130 124;
+
+  --c-ember: 255 106 43;
+  --c-ember-deep: 205 78 28;
+  --c-hazard: 217 165 33;
+  --c-blood: 214 69 48;
+  --c-olive: 133 144 88;
+
+  --c-blueprint: 200 214 224;
+  --c-grid: 44 56 68;
+}
+
+.light {
+  --c-steel-950: 229 226 219;
+  --c-steel-900: 236 233 227;
+  --c-steel-850: 243 240 235;
+  --c-steel-800: 248 246 242;
+  --c-steel-700: 219 215 207;
+  --c-steel-600: 199 195 187;
+  --c-rivet: 168 164 155;
+
+  --c-bone: 28 35 43;
+  --c-bone-soft: 74 80 88;
+  --c-bone-faint: 118 122 126;
+
+  --c-ember: 205 78 28;
+  --c-ember-deep: 168 60 20;
+  --c-hazard: 158 118 18;
+  --c-blood: 168 48 34;
+  --c-olive: 96 106 60;
+
+  --c-blueprint: 42 52 62;
+  --c-grid: 203 207 211;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------- */
+
+html {
+  height: 100%;
+}
+
+body {
+  @apply bg-steel-950 text-bone font-body antialiased;
+  min-height: 100%;
+  background-image: radial-gradient(
+    ellipse at top,
+    rgb(var(--c-steel-900)),
+    rgb(var(--c-steel-950)) 60%
+  );
+}
+
+::selection {
+  background: rgb(var(--c-ember) / 0.35);
+}
+
+*:focus-visible {
+  outline: 2px solid rgb(var(--c-ember) / 0.8);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--c-steel-900));
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-steel-600));
+  border-radius: 5px;
+  border: 2px solid rgb(var(--c-steel-900));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-rivet));
+}
+
+/* ---------------------------------------------------------------------------
+ * Component utilities
+ * ------------------------------------------------------------------------- */
+
+@layer components {
+  /* Panel surfaces */
+  .surface-panel {
+    @apply bg-steel-900 border border-rivet/40 rounded-card shadow-card;
+  }
+  .surface-raised {
+    @apply bg-steel-850 border border-rivet/50 rounded-card shadow-raised;
+  }
+  .surface-inset {
+    @apply bg-steel-950/60 border border-rivet/30 rounded-card shadow-inset;
+  }
+
+  /* Stencil display headings */
+  .heading-stencil {
+    @apply font-display uppercase tracking-title;
+  }
+
+  /* Rubber-stamp label, like the OFFICIAL marks on recovered documents */
+  .stamp {
+    @apply inline-block font-display uppercase tracking-stamp text-xs px-2 py-0.5 border-2 rounded-sm;
+    transform: rotate(-2deg);
+  }
+  .stamp-ember {
+    @apply stamp text-ember border-ember/70;
+  }
+  .stamp-hazard {
+    @apply stamp text-hazard border-hazard/70;
+  }
+
+  /* Blueprint canvas backdrop: engineering grid */
+  .blueprint-grid {
+    background-color: rgb(var(--c-steel-950));
+    background-image:
+      linear-gradient(rgb(var(--c-grid) / 0.45) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--c-grid) / 0.45) 1px, transparent 1px),
+      linear-gradient(rgb(var(--c-grid) / 0.22) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--c-grid) / 0.22) 1px, transparent 1px);
+    background-size:
+      80px 80px,
+      80px 80px,
+      16px 16px,
+      16px 16px;
+  }
+
+  /* Tabular figures for stat readouts */
+  .numerals {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Hazard stripe divider (subtle) */
+  .hazard-stripe {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      rgb(var(--c-hazard) / 0.6) 0 8px,
+      rgb(var(--c-steel-950) / 0.0) 8px 16px
+    );
+    height: 3px;
+  }
+}
