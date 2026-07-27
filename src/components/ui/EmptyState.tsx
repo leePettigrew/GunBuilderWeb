@@ -17,7 +17,13 @@ export function EmptyState({
   action,
   className,
 }: EmptyStateProps) {
-  const IconComponent = typeof icon === "function" ? icon : null;
+  let iconNode: ReactNode = null;
+  if (typeof icon === "function") {
+    const IconComponent = icon;
+    iconNode = <IconComponent className="h-10 w-10 text-bone-faint" />;
+  } else if (icon !== undefined && icon !== null) {
+    iconNode = <div className="text-bone-faint">{icon}</div>;
+  }
 
   return (
     <div
@@ -26,11 +32,7 @@ export function EmptyState({
         className,
       )}
     >
-      {IconComponent !== null ? (
-        <IconComponent className="h-10 w-10 text-bone-faint" />
-      ) : icon !== undefined && icon !== null ? (
-        <div className="text-bone-faint">{icon}</div>
-      ) : null}
+      {iconNode}
       <h3 className="heading-stencil text-base text-bone">{title}</h3>
       {body !== undefined && (
         <p className="max-w-md text-sm text-bone-soft">{body}</p>

@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { AppShell } from "@/components/shell/AppShell";
 import { DataProvider } from "@/lib/data/context";
-import { THEME_INIT_SCRIPT, ThemeProvider } from "@/lib/data/theme";
+import { THEME_INIT_SCRIPT } from "@/lib/data/theme-script";
+import { ThemeProvider } from "@/lib/data/theme";
 
 export const metadata: Metadata = {
   title: "Ashen Armoury — Weapon Fabricator",

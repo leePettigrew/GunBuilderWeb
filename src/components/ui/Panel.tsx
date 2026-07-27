@@ -52,7 +52,7 @@ export function Panel({
           )}
         </header>
       )}
-      {/* p-4 (shorthand) so px-*/py-*/pt-* overrides from bodyClassName win */}
+      {/* p-4 shorthand so px/py/pt overrides from bodyClassName win */}
       <div className={cn("p-4", bodyClassName)}>{children}</div>
     </section>
   );
