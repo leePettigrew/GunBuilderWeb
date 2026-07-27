@@ -178,6 +178,21 @@ export function computeFirearm(build: FirearmBuild, rules: Ruleset): WeaponStats
   if (!action) warnings.push("No action selected.");
   if (!magazine) warnings.push("No magazine selected.");
 
+  // Realism constraints: a platform only takes what it can physically mount.
+  if (frame && action && frame.actionIds !== undefined && !frame.actionIds.includes(action.id)) {
+    warnings.push(`A ${frame.label} can't run a ${action.label} action.`);
+  }
+  if (frame && magazine && frame.magazineIds !== undefined && !frame.magazineIds.includes(magazine.id)) {
+    warnings.push(`A ${frame.label} can't feed from a ${magazine.label.toLowerCase()}.`);
+  }
+  if (frame && frame.attachmentIds !== undefined) {
+    for (const att of attachments) {
+      if (!frame.attachmentIds.includes(att.id)) {
+        warnings.push(`${att.label} doesn't mount on a ${frame.label}.`);
+      }
+    }
+  }
+
   const isShotgun = frame !== undefined && frame.ammoClasses.includes("shell");
   const cartridge = findById(c.cartridges, build.cartridgeId);
   const shellType = findById(c.shellTypes, build.shellTypeId);

@@ -177,6 +177,14 @@ export interface FrameDef {
   example: string; // flavor: "M1911", "Sten Gun"…
   /** Which ammo classes this frame accepts. */
   ammoClasses: ("pistol" | "rifle" | "shell")[];
+  /**
+   * Realism constraints: which actions / feeds / attachments this platform
+   * can physically take (no belt-fed pistols). `undefined` = anything goes;
+   * the builder filters its pickers and the engine warns on violations.
+   */
+  actionIds?: string[];
+  magazineIds?: string[];
+  attachmentIds?: string[];
   /** Which row of the range-malus table this frame reads. */
   rangeMalusId: string;
   baseDice: number; // frame contribution to the dice pool (default 1)

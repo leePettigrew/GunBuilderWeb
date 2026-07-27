@@ -34,8 +34,12 @@ export default function GalleryPage() {
       make("sniper", "Mosin Pattern", { cartridgeId: "762x54r", actionId: "bolt", magazineId: "clip", barrelLengthMm: 730 }),
       make("lmg", "Bren Pattern", { cartridgeId: "303brit", actionId: "auto", magazineId: "box", barrelLengthMm: 635, attachmentIds: ["bipod"] }),
       make("assaultRifle", "Suppressed Drum Variant", { actionId: "semiBurstFull", magazineId: "drum", barrelLengthMm: 405, attachmentIds: ["suppressor", "scope", "laser"], stockId: "collapsible" }),
-      make("pistol", "Holdout Variant", { cartridgeId: "9x19", actionId: "semi", barrelLengthMm: 100, attachmentIds: ["suppressor", "flashlight"], stockId: "pistolGrip" }),
       make("sniper", "AT Variant", { cartridgeId: "145x114", actionId: "bolt", magazineId: "box", barrelLengthMm: 900, attachmentIds: ["bipod", "scope", "muzzleBrake"] }),
+      // Pistol variants — the interchangeable-parts test bench
+      make("pistol", "Commander Compact", { cartridgeId: "9x19", actionId: "semi", barrelLengthMm: 108, attachmentIds: ["laser"], stockId: "pistolGrip" }),
+      make("pistol", "Holdout Suppressed", { cartridgeId: "22lr", actionId: "semi", barrelLengthMm: 115, attachmentIds: ["suppressor", "flashlight"], stockId: "pistolGrip" }),
+      make("pistol", "Longslide Redline", { cartridgeId: "10mm", actionId: "semi", barrelLengthMm: 178, magazineId: "extended", attachmentIds: ["redDot", "compensator"], stockId: "pistolGrip" }),
+      make("pistol", "Snail Special", { cartridgeId: "45acp", actionId: "doubleAction", barrelLengthMm: 127, magazineId: "drum", attachmentIds: ["muzzleBrake", "laser"], stockId: "pistolGrip" }),
     ];
   }, [ruleset]);
 

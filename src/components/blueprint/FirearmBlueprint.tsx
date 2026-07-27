@@ -60,14 +60,32 @@ interface FrameSpec {
   /** Barrel housed inside the frame BEHIND rx1 (pistol slide): only the
    *  remainder protrudes, and the dimension line shifts back by this much. */
   barrelBehind?: number;
+  /** Barrel always ends flush at the (possibly shifted) muzzle face. */
+  barrelFlush?: boolean;
+  /** Muzzle face shift for barrel-length-driven slide stretch (px). */
+  muzzleShift?: (barrelPx: number) => number;
   /** Box mags live inside the grip (pistols): draw a baseplate instead. */
   hiddenMag?: boolean;
-  draw: (barrelPx: number) => ReactNode;
+  draw: (barrelPx: number, build: FirearmBuild) => ReactNode;
 }
 
 const S = stroke;
 const T = strokeThin;
 const HATCH = "url(#bp-hatch)";
+
+// Parsed once: the traced M1911 outline, stretchable at the dust cover so
+// barrel length reshapes the slide (commander -> government -> longslide).
+const M1911_PTS = (M1911_OUTLINE.match(/[ML][\d.]+,[\d.]+/g) ?? []).map((t) => {
+  const [x = 0, y = 0] = t.slice(1).split(",").map(Number);
+  return { x, y };
+});
+function m1911Path(deltaMm: number): string {
+  return (
+    M1911_PTS.map(
+      (pt, i) => `${i === 0 ? "M" : "L"}${(pt.x > 480 ? pt.x + deltaMm : pt.x).toFixed(1)},${pt.y.toFixed(1)}`,
+    ).join("") + "Z"
+  );
+}
 
 const FRAME_SPECS: Record<string, FrameSpec> = {
   // ----- M1911 service pistol — outline traced from FM 23-35 (1940) --------
@@ -84,16 +102,19 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
     side: { x: 456, y: 179 },
     belt: { x: 420, y: 235 },
     pxPerMm: 1.4,
-    barrelBehind: 179, // 127mm barrel sits flush with the bushing (×1.4)
+    barrelFlush: true, // the slide houses the barrel; muzzle face moves instead
+    muzzleShift: (b) => Math.max(-25, Math.min((b / 1.4 - 127) * 1.4, 77)),
     hiddenMag: true,
-    draw: () => (
+    draw: (barrelPx, build) => {
+      const deltaMm = Math.max(-18, Math.min(barrelPx / 1.4 - 127, 55));
+      return (
       <g transform="translate(560,130) scale(1.4) translate(-560,-141)">
-        {/* true silhouette */}
-        <path d={M1911_OUTLINE} {...S} strokeWidth={1.4} />
+        {/* true silhouette, slide stretched to the barrel length */}
+        <path d={m1911Path(deltaMm)} {...S} strokeWidth={1.4} />
         {/* clean inner trigger-guard edge (the traced hole is too noisy) */}
         <path d="M473,189 C470,203 462,209 446,210" {...T} strokeWidth={0.9} />
         {/* slide / frame separation at the true frame junction */}
-        <line x1={368} y1={175} x2={553} y2={175} {...T} strokeWidth={0.8} />
+        <line x1={368} y1={175} x2={553 + deltaMm} y2={175} {...T} strokeWidth={0.8} />
         {/* rear cocking serrations, behind the rear sight */}
         {[369, 374, 379].map((x) => (
           <line key={x} x1={x + 2} y1={150} x2={x} y2={172} {...T} strokeWidth={0.8} />
@@ -123,14 +144,35 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
           {[201, 213, 225, 237, 249, 261].map((y) => (
             <circle key={y} cx={430.5 - (y - 189) * 0.32} cy={y} r={1.2} fill="rgb(var(--c-blueprint))" stroke="none" opacity={0.8} />
           ))}
-          <path d="M394,271 L409,271 L408,275 L393,275 Z" {...S} strokeWidth={1.1} />
+          {["box", "detachable"].includes(build.magazineId) && (
+            <path d="M394,271 L409,271 L408,275 L393,275 Z" {...S} strokeWidth={1.1} />
+          )}
         </g>
+        {/* extended magazine: body protrudes below the grip on the rake */}
+        {build.magazineId === "extended" && (
+          <g>
+            <path d="M393,271 L409,271 L402,296 q-8,3 -15,-1 Z" {...S} strokeWidth={1.1} fill={HATCH} />
+            <path d="M386,297 L403,297 L402,301 L385,301 Z" {...S} strokeWidth={1.1} />
+            {[279, 288].map((y) => (
+              <circle key={y} cx={404 - (y - 271) * 0.32} cy={y} r={1.3} {...T} strokeWidth={0.7} />
+            ))}
+          </g>
+        )}
+        {/* snail drum tucked under the butt */}
+        {build.magazineId === "drum" && (
+          <g>
+            <path d="M395,271 L409,271 L406,282 L392,282 Z" {...S} strokeWidth={1.1} />
+            <circle cx={392} cy={296} r={15} {...S} strokeWidth={1.2} fill={HATCH} />
+            <circle cx={392} cy={296} r={4.5} {...S} strokeWidth={0.9} fill="rgb(var(--c-steel-950))" />
+          </g>
+        )}
         {/* scale note */}
         <text x={344} y={296} fontFamily="var(--font-mono)" fontSize={8} letterSpacing="0.15em" fill="rgb(var(--c-bone-faint))">
           SCALE 2.8:1
         </text>
       </g>
-    ),
+      );
+    },
   },
 
   // ----- Sten-pattern tube SMG ---------------------------------------------
@@ -523,6 +565,17 @@ function magazineShape(magId: string): ReactNode {
       );
     case "integratedDrum":
       return <circle cx={-6} cy={24} r={21} {...S} strokeDasharray="5 4" />;
+    case "extended":
+      // longer straight box with witness holes
+      return (
+        <g>
+          <path d="M-12,0 l-3,62 q0,7 7,7 h17 q7,0 7,-7 l-3,-62 z" {...S} fill={HATCH} />
+          <line x1={-16} y1={62} x2={17} y2={64} {...T} />
+          {[14, 28, 42, 55].map((y) => (
+            <circle key={y} cx={-3} cy={y} r={1.8} {...T} />
+          ))}
+        </g>
+      );
     case "tube":
     case "cylinder":
     case "clip":
@@ -549,12 +602,13 @@ function barrelAssembly(
   if (build.barrelTypeId === "heavy") half += 1.6;
   if (build.barrelTypeId === "light") half -= 1.2;
   const y = spec.barrelY;
-  // The bore may hide under an external shroud (SMG) or live inside the
-  // frame behind the muzzle face (pistol slide) — only the rest is drawn.
-  const behind = spec.barrelBehind ?? 0;
-  const x1 = spec.rx1 + Math.max(0, barrelPx - behind);
-  const inset = Math.min(spec.barrelInset?.(barrelPx) ?? 0, Math.max(0, x1 - spec.rx1));
-  const x0 = spec.rx1 + inset;
+  // The bore may hide under an external shroud (SMG) or live entirely inside
+  // the slide (flush pistols, whose muzzle face shifts with barrel length).
+  const rx1 = spec.rx1 + (spec.muzzleShift?.(barrelPx) ?? 0);
+  const behind = spec.barrelFlush === true ? barrelPx : (spec.barrelBehind ?? 0);
+  const x1 = rx1 + Math.max(0, barrelPx - behind);
+  const inset = Math.min(spec.barrelInset?.(barrelPx) ?? 0, Math.max(0, x1 - rx1));
+  const x0 = rx1 + inset;
   const boreVisible = x1 - x0 > 4;
   const choke = build.barrelTypeId === "choked" ? 2 : 0;
   const tipHalf = spec.taper ? Math.max(2.2, half - 1.8) - choke : half - choke;
@@ -686,6 +740,18 @@ function attachmentsFor(build: FirearmBuild, spec: FrameSpec, barrelPx: number):
       </g>,
     );
   }
+  if (has("redDot")) {
+    const rx = spec.rail.x0 + (spec.rail.x1 - spec.rail.x0) * 0.22;
+    const ry = spec.rail.y;
+    parts.push(
+      <g key="redDot">
+        <line x1={rx + 2} y1={ry} x2={rx + 16} y2={ry} {...S} />
+        <rect x={rx} y={ry - 12} width={18} height={11} rx={2.5} {...S} />
+        <rect x={rx + 3.5} y={ry - 9.5} width={9} height={6} rx={1} {...T} />
+        <circle cx={rx + 8} cy={ry - 6.5} r={1.3} fill="rgb(var(--c-ember))" stroke="none" />
+      </g>,
+    );
+  }
   if (has("ubgl")) {
     parts.push(
       <g key="ubgl">
@@ -801,7 +867,11 @@ export function FirearmBlueprint({
   const scale = spec.pxPerMm ?? PX_PER_MM;
   const breakAction = BREAK_ACTIONS.has(build.actionId);
   const doubleBore = breakAction && build.frameId === "shotgun";
-  const barrelPx = Math.max(26 * scale, Math.min(build.barrelLengthMm * scale, MAX_TIP_X - spec.rx1 + (spec.barrelBehind ?? 0) - 90));
+  const barrelPx = Math.max(
+    26 * scale,
+    Math.min(build.barrelLengthMm * scale, MAX_TIP_X - spec.rx1 + (spec.barrelFlush === true ? build.barrelLengthMm * scale : (spec.barrelBehind ?? 0)) - 90),
+  );
+  const effRx1 = spec.rx1 + (spec.muzzleShift?.(barrelPx) ?? 0);
   const { node: barrelNode, tipX } = barrelAssembly(build, spec, barrelPx, doubleBore, scale);
 
   const magNode = magazineShape(build.magazineId);
@@ -827,13 +897,12 @@ export function FirearmBlueprint({
       {stockNode !== null && spec.stock !== null && (
         <g transform={`translate(${spec.stock.x},${spec.stock.y})`}>{stockNode}</g>
       )}
-      {/* Pistols (hiddenMag) draw their own in-grip magazine X-ray. */}
-      {!(spec.hiddenMag === true && ["box", "detachable"].includes(build.magazineId)) &&
-        magNode !== null && (
-          <g transform={`translate(${spec.mag.x},${spec.mag.y}) rotate(${spec.mag.angle})`}>{magNode}</g>
-        )}
+      {/* hiddenMag frames (pistols) draw their own feeds at native scale. */}
+      {spec.hiddenMag !== true && magNode !== null && (
+        <g transform={`translate(${spec.mag.x},${spec.mag.y}) rotate(${spec.mag.angle})`}>{magNode}</g>
+      )}
       {specialFeed(build, spec, barrelPx)}
-      {spec.draw(barrelPx)}
+      {spec.draw(barrelPx, build)}
       {barrelNode}
       {attachmentsFor(build, spec, barrelPx)}
       {/* rear sight tick (frames with their own furniture already have one) */}
@@ -845,7 +914,7 @@ export function FirearmBlueprint({
         <CalloutLabel x={spec.rail.x0 + 44} y={spec.rail.y - 6} tx={spec.rail.x0 + 4} ty={84} text={action.label} />
       )}
       {feedLabel && (
-        <CalloutLabel x={spec.rx1 + 8} y={spec.barrelY - spec.barrelHalf} tx={spec.rx1 + 100} ty={98} text={feedLabel} />
+        <CalloutLabel x={effRx1 + 8} y={spec.barrelY - spec.barrelHalf} tx={effRx1 + 100} ty={98} text={feedLabel} />
       )}
       {firstAttachment && (
         <CalloutLabel
@@ -874,8 +943,8 @@ export function FirearmBlueprint({
         />
       )}
       <DimensionLine
-        x1={spec.rx1 - (spec.barrelBehind ?? 0)}
-        x2={spec.rx1 - (spec.barrelBehind ?? 0) + barrelPx}
+        x1={effRx1 - (spec.barrelFlush === true ? barrelPx : (spec.barrelBehind ?? 0))}
+        x2={effRx1 - (spec.barrelFlush === true ? barrelPx : (spec.barrelBehind ?? 0)) + barrelPx}
         y={300}
         label={`${build.barrelLengthMm} MM BARREL`}
       />

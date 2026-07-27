@@ -24,12 +24,24 @@ export function newFirearmBuild(rules: Ruleset, frameId?: string): FirearmBuild 
     ? (c.cartridges.find((a) => a.id === preferred && frame.ammoClasses.includes(a.class)) ??
       c.cartridges.find((a) => frame.ammoClasses.includes(a.class)))
     : undefined;
+  // Clamp defaults to the frame's compatibility lists (Rules Lab may narrow
+  // them) so a fresh build never starts in an invalid state.
+  const wantAction = frame?.id === "lmg" ? "auto" : "semi";
+  const actionId =
+    frame?.actionIds === undefined || frame.actionIds.includes(wantAction)
+      ? wantAction
+      : frame.actionIds[0] ?? wantAction;
+  const wantMag = frame?.id === "lmg" ? "belt" : isShotgun ? "tube" : "box";
+  const magazineId =
+    frame?.magazineIds === undefined || frame.magazineIds.includes(wantMag)
+      ? wantMag
+      : frame.magazineIds[0] ?? wantMag;
   return {
     family: "firearm",
     name: "Unnamed Pattern",
     frameId: frame?.id ?? "",
-    actionId: frame?.id === "lmg" ? "auto" : "semi",
-    magazineId: frame?.id === "lmg" ? "belt" : isShotgun ? "tube" : "box",
+    actionId,
+    magazineId,
     cartridgeId: isShotgun ? undefined : cartridge?.id,
     shellTypeId: isShotgun ? c.shellTypes.find((s) => s.id === "buckshot")?.id ?? c.shellTypes[0]?.id : undefined,
     shellGaugeId: isShotgun ? c.shellGauges.find((g) => g.id === "12ga")?.id ?? c.shellGauges[0]?.id : undefined,

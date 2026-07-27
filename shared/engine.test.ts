@@ -253,3 +253,36 @@ describe("untrusted build validation", () => {
     expect(parseWeaponExport(JSON.stringify({ schema: "ashen-skies/weapon@1", build: valid }))).toEqual(valid);
   });
 });
+
+describe("realism compatibility", () => {
+  it("warns on a belt-fed pistol but accepts an extended-mag suppressed red-dot pistol", () => {
+    const build = newFirearmBuild(rules, "pistol");
+    build.magazineId = "belt";
+    const bad = computeFirearm(build, rules);
+    expect(bad.warnings.some((w) => w.includes("can't feed"))).toBe(true);
+
+    const good = newFirearmBuild(rules, "pistol");
+    good.magazineId = "extended";
+    good.attachmentIds = ["suppressor", "redDot", "laser"];
+    expect(computeFirearm(good, rules).warnings).toEqual([]);
+  });
+
+  it("warns when a pistol mounts a bipod or runs a bolt action", () => {
+    const build = newFirearmBuild(rules, "pistol");
+    build.actionId = "bolt";
+    build.attachmentIds = ["bipod"];
+    const stats = computeFirearm(build, rules);
+    expect(stats.warnings.some((w) => w.includes("action"))).toBe(true);
+    expect(stats.warnings.some((w) => w.includes("mount"))).toBe(true);
+  });
+
+  it("keeps unrestricted frames unrestricted when lists are undefined", () => {
+    const custom = structuredClone(rules);
+    const frame = custom.catalog.frames.find((f) => f.id === "assaultRifle")!;
+    delete frame.actionIds;
+    delete frame.magazineIds;
+    const build = newFirearmBuild(custom, "assaultRifle");
+    build.magazineId = "belt";
+    expect(computeFirearm(build, custom).warnings).toEqual([]);
+  });
+});

@@ -200,6 +200,9 @@ export function RulesLab() {
             { key: "defaultBarrelMm", label: "Barrel mm", kind: "number", width: "w-20" },
             { key: "smgHandling", label: "SMG", kind: "toggle", width: "w-12" },
             { key: "lmgHandling", label: "LMG", kind: "toggle", width: "w-12" },
+            { key: "actionIds", label: "Allowed actions", kind: "csv", width: "min-w-44" },
+            { key: "magazineIds", label: "Allowed feeds", kind: "csv", width: "min-w-44" },
+            { key: "attachmentIds", label: "Allowed attachments", kind: "csv", width: "min-w-44" },
           ]}
           onChange={(rows) => patch((d) => void (d.catalog.frames = rows))}
           makeBlank={() => ({ id: "frame", label: "New frame", example: "", ammoClasses: ["rifle" as const], rangeMalusId: malusKeyOptions[0]?.value ?? "carbine", baseDice: 0, baseWeightKg: 3, basePriceRats: 1000, defaultBarrelMm: 400 })}

@@ -211,6 +211,9 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 1.0,
         basePriceRats: 400,
         defaultBarrelMm: 120,
+        actionIds: ["singleAction", "doubleAction", "semi", "semiBurst", "semiFull"],
+        magazineIds: ["box", "detachable", "extended", "drum"],
+        attachmentIds: ["redDot", "laser", "flashlight", "suppressor", "compensator", "muzzleBrake"],
         note: "Concealable holdout. Stealth attacks from an unaware target add one damage die to the first shot.",
       },
       {
@@ -223,6 +226,9 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 3.0,
         basePriceRats: 1000,
         defaultBarrelMm: 200,
+        actionIds: ["semi", "burst", "auto", "semiBurst", "semiBurst2", "semiFull", "semiBurstFull"],
+        magazineIds: ["box", "detachable", "extended", "drum", "integratedDrum"],
+        attachmentIds: ["redDot", "scope", "laser", "flashlight", "suppressor", "compensator", "muzzleBrake", "foregrip", "bayonet"],
         smgHandling: true,
         note: "Reduced stacking recoil (−1) in burst/auto. Cannot be mounted or braced.",
       },
@@ -236,6 +242,8 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 3.2,
         basePriceRats: 1200,
         defaultBarrelMm: 400,
+        actionIds: ["lever", "semi", "burst", "auto", "semiBurst", "semiBurst2", "semiFull", "semiBurstFull"],
+        magazineIds: ["box", "detachable", "extended", "drum", "tube", "clip", "enBloc"],
       },
       {
         id: "assaultRifle",
@@ -247,6 +255,8 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 3.5,
         basePriceRats: 1600,
         defaultBarrelMm: 415,
+        actionIds: ["semi", "burst", "auto", "semiBurst", "semiBurst2", "semiFull", "semiBurstFull"],
+        magazineIds: ["box", "detachable", "extended", "drum"],
       },
       {
         id: "battleRifle",
@@ -258,6 +268,8 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 4.0,
         basePriceRats: 1750,
         defaultBarrelMm: 400,
+        actionIds: ["semi", "burst", "auto", "semiBurst", "semiBurst2", "semiFull", "semiBurstFull"],
+        magazineIds: ["box", "detachable", "extended", "drum"],
       },
       {
         id: "shotgun",
@@ -269,6 +281,9 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 3.2,
         basePriceRats: 1450,
         defaultBarrelMm: 700,
+        actionIds: ["break", "pump", "lever", "semi", "auto"],
+        magazineIds: ["breach", "tube", "box", "detachable", "drum"],
+        attachmentIds: ["scope", "redDot", "laser", "flashlight", "suppressor", "bayonet", "foregrip"],
         note: "Non-slug ammo can scatter onto characters within 2m of the target (DEX save DC10).",
       },
       {
@@ -281,6 +296,8 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 4.3,
         basePriceRats: 1400,
         defaultBarrelMm: 620,
+        actionIds: ["semi"],
+        magazineIds: ["box", "detachable", "extended", "clip", "enBloc"],
         note: "Lined-up shot: spend a firing action aiming for +2 to hit next turn.",
       },
       {
@@ -293,6 +310,9 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 4.0,
         basePriceRats: 1800,
         defaultBarrelMm: 730,
+        actionIds: ["bolt", "break", "lever", "semi", "flintlock", "matchlock"],
+        magazineIds: ["muzzle", "breach", "clip", "enBloc", "box", "detachable"],
+        attachmentIds: ["scope", "redDot", "bipod", "suppressor", "muzzleBrake", "compensator", "flashlight", "laser", "bayonet"],
         note: "Lined-up shot: spend a firing action aiming for +2 to hit next turn.",
       },
       {
@@ -305,6 +325,9 @@ export const DEFAULT_RULESET: Ruleset = {
         baseWeightKg: 8.5,
         basePriceRats: 2000,
         defaultBarrelMm: 635,
+        actionIds: ["auto"],
+        magazineIds: ["belt", "drum", "integratedDrum", "box", "detachable", "extended"],
+        attachmentIds: ["bipod", "scope", "redDot", "laser", "flashlight", "suppressor", "muzzleBrake", "compensator", "foregrip"],
         lmgHandling: true,
         note: "No single fire — always expends 10 rounds. Reload and setup are full-round actions. −8 to hit while moving.",
       },
@@ -338,6 +361,7 @@ export const DEFAULT_RULESET: Ruleset = {
       { id: "box", label: "Box Magazine", damageDice: 0, pricePct: 0.1, weightPct: 0.16, reloadNote: "Half-round reload." },
       { id: "drum", label: "Drum Magazine", damageDice: 0, pricePct: 0.12, weightPct: 0.2, reloadNote: "Half-round reload." },
       { id: "detachable", label: "Detachable Magazine", damageDice: 0, pricePct: 0.11, weightPct: 0.18, reloadNote: "Half-round reload." },
+      { id: "extended", label: "Extended Magazine", damageDice: 0, pricePct: 0.09, weightPct: 0.05, reloadNote: "Half-round reload; more rounds between reloads." },
       { id: "belt", label: "Belt-Fed", damageDice: -1, pricePct: 0.14, weightPct: 0.22, reloadNote: "Full-round reload. −1 die (V5 balance: sustained-fire tradeoff)." },
       { id: "integratedDrum", label: "Integrated Drum", damageDice: 0, pricePct: 0.16, weightPct: 0.25 },
     ],
@@ -361,6 +385,7 @@ export const DEFAULT_RULESET: Ruleset = {
 
     attachments: [
       { id: "scope", label: "Scope", anchor: "rail", pricePct: 0.1, weightPct: 0.05, accuracyMod: 2, hideMod: -1, damageDice: 0 },
+      { id: "redDot", label: "Red Dot Sight", anchor: "rail", pricePct: 0.12, weightPct: 0.02, accuracyMod: 1, hideMod: 0, damageDice: 0, note: "Fast acquisition — both eyes open." },
       { id: "laser", label: "Laser Module", anchor: "side", pricePct: 0.08, weightPct: 0.03, accuracyMod: 1, hideMod: 0, damageDice: 0 },
       { id: "flashlight", label: "Flashlight", anchor: "side", pricePct: 0.05, weightPct: 0.02, accuracyMod: 0, hideMod: 0, damageDice: 0 },
       { id: "ubgl", label: "Underbarrel Grenade Launcher", anchor: "underbarrel", pricePct: 0.5, weightPct: 0.2, accuracyMod: 0, hideMod: -2, damageDice: 0, note: "Fires 40mm grenades — build its projectile in the Grenade fabricator." },

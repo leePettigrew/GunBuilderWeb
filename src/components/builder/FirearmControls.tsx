@@ -81,16 +81,40 @@ export function FirearmControls({ build, rules, onChange }: FirearmControlsProps
   const cartridge = findById(c.cartridges, build.cartridgeId);
   const isShellFed = frame?.ammoClasses.includes("shell") ?? false;
 
-  // Frame swap reseeds every dependent part; name, notes and still-valid
-  // attachments survive the swap.
+  // Frame swap reseeds every dependent part; name, notes and attachments the
+  // NEW platform can still mount survive the swap.
   function changeFrame(frameId: string) {
     const seed = newFirearmBuild(rules, frameId);
+    const nextFrame = findById(c.frames, frameId);
     onChange({
       ...seed,
       name: build.name,
-      attachmentIds: build.attachmentIds.filter((id) => c.attachments.some((a) => a.id === id)),
+      attachmentIds: build.attachmentIds.filter(
+        (id) =>
+          c.attachments.some((a) => a.id === id) &&
+          (nextFrame?.attachmentIds === undefined || nextFrame.attachmentIds.includes(id)),
+      ),
       ...(build.notes !== undefined ? { notes: build.notes } : {}),
     });
+  }
+
+  // Realism filter: only parts this platform can physically take. The current
+  // selection stays listed (flagged) so an incompatible legacy build is
+  // visible rather than silently blanked.
+  function compatible<T extends { id: string; label: string }>(
+    parts: T[],
+    allowed: string[] | undefined,
+    currentId: string,
+  ): { value: string; label: string }[] {
+    return parts
+      .filter((part) => allowed === undefined || allowed.includes(part.id) || part.id === currentId)
+      .map((part) => ({
+        value: part.id,
+        label:
+          allowed !== undefined && !allowed.includes(part.id)
+            ? `${part.label} (incompatible)`
+            : part.label,
+      }));
   }
 
   const grantedModes = (action?.fireModeIds ?? [])
@@ -118,14 +142,14 @@ export function FirearmControls({ build, rules, onChange }: FirearmControlsProps
           label="Action"
           value={build.actionId}
           onChange={(actionId) => onChange({ ...build, actionId })}
-          options={c.actions.map((a) => ({ value: a.id, label: a.label }))}
+          options={compatible(c.actions, frame?.actionIds, build.actionId)}
           hint={actionHint}
         />
         <SelectField
           label="Feed system"
           value={build.magazineId}
           onChange={(magazineId) => onChange({ ...build, magazineId })}
-          options={c.magazines.map((m) => ({ value: m.id, label: m.label }))}
+          options={compatible(c.magazines, frame?.magazineIds, build.magazineId)}
           hint={findById(c.magazines, build.magazineId)?.reloadNote}
         />
       </div>
@@ -197,7 +221,7 @@ export function FirearmControls({ build, rules, onChange }: FirearmControlsProps
           Attachments
         </p>
         <AttachmentGroups
-          attachments={c.attachments}
+          attachments={c.attachments.filter((a) => frame?.attachmentIds === undefined || frame.attachmentIds.includes(a.id) || build.attachmentIds.includes(a.id))}
           selectedIds={build.attachmentIds}
           onChange={(attachmentIds) => onChange({ ...build, attachmentIds })}
         />
