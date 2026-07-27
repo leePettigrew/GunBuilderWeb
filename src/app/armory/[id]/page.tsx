@@ -184,8 +184,9 @@ function ArmoryWeaponView() {
         confirmLabel="Scrap it"
         onConfirm={() => {
           setConfirmingDelete(false);
-          remove(weapon.id);
+          // Navigate first so the detail page never flashes "Pattern not found".
           router.push("/armory");
+          remove(weapon.id);
         }}
         onCancel={() => setConfirmingDelete(false)}
       />

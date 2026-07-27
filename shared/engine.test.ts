@@ -80,7 +80,7 @@ describe("revised joules bands", () => {
 });
 
 describe("fire modes", () => {
-  it("burst-3 on a 3-die weapon shows 5 dice if all shots hit (doc example)", () => {
+  it("burst-3 on a 2-die weapon shows 3 dice if all shots hit", () => {
     const build = newFirearmBuild(rules, "assaultRifle");
     build.actionId = "semiBurst";
     build.cartridgeId = "762x39";
@@ -90,6 +90,18 @@ describe("fire modes", () => {
     const burst = stats.fireModes.find((m) => m.modeId === "burst3")!;
     expect(burst.damage.terms[0]?.count).toBe(3);
     expect(burst.ammoCost).toBe(3);
+  });
+
+  it("burst-3 on a 3-die weapon shows 5 dice if all shots hit (doc p.5 example)", () => {
+    const build = newFirearmBuild(rules, "assaultRifle");
+    build.actionId = "semiBurstFull";
+    build.cartridgeId = "762x39";
+    build.barrelLengthMm = 710; // +3 dice band → pre-halve 5 → weapon 3d10
+    const stats = computeFirearm(build, rules);
+    expect(stats.damage.terms[0]?.count).toBe(3);
+    const burst = stats.fireModes.find((m) => m.modeId === "burst3")!;
+    // 3 hits × 3 dice = 9, halved rounded up = 5 — the doc's worked example
+    expect(burst.damage.terms[0]?.count).toBe(5);
   });
 
   it("locks LMG frames to 10-round full auto", () => {
@@ -197,5 +209,47 @@ describe("dice helpers", () => {
     expect(formatDice({ terms: [{ count: 1, size: 10 }, { count: 1, size: 8 }], bonus: 0 })).toBe("1d10+1d8");
     expect(formatDice({ terms: [], bonus: 0 })).toBe("0");
     expect(averageDamage({ terms: [{ count: 2, size: 10 }], bonus: 4 })).toBe(15);
+  });
+
+  it("renders negative flat bonuses and floors averages at zero", () => {
+    expect(formatDice({ terms: [{ count: 2, size: 10 }], bonus: -3 })).toBe("2d10-3");
+    expect(formatDice({ terms: [], bonus: -2 })).toBe("-2");
+    expect(averageDamage({ terms: [{ count: 1, size: 4 }], bonus: -4 })).toBe(0);
+  });
+});
+
+describe("band gaps resolve to the nearest band", () => {
+  it("a 550.5mm barrel gets +1 die (nearest), not the +3 top band", () => {
+    const build = newFirearmBuild(rules, "sniper");
+    build.actionId = "bolt";
+    build.cartridgeId = "762x39";
+    build.barrelLengthMm = 550.5;
+    // round C (2) + bolt (+1) + barrel nearest band 201–550 (+1) = 4 → 2d10
+    expect(computeFirearm(build, rules).damageLabel).toBe("2d10");
+  });
+
+  it("a 700.5J cartridge gets d6 (nearest), not the d12+6 top band", () => {
+    const custom = structuredClone(rules);
+    const nine = custom.catalog.cartridges.find((c) => c.id === "9x19")!;
+    nine.joules = 700.5;
+    const build = newFirearmBuild(custom, "pistol");
+    build.cartridgeId = "9x19";
+    const stats = computeFirearm(build, custom);
+    expect(stats.damage.terms[0]?.size).toBe(6);
+    expect(stats.damage.bonus).toBe(0);
+  });
+});
+
+describe("untrusted build validation", () => {
+  it("rejects unknown families and malformed firearm builds on import", async () => {
+    const { parseWeaponExport } = await import("./export");
+    expect(parseWeaponExport(JSON.stringify({ schema: "ashen-skies/weapon@1", build: { family: "laser", name: "x" } }))).toBeNull();
+    expect(
+      parseWeaponExport(
+        JSON.stringify({ schema: "ashen-skies/weapon@1", build: { family: "firearm", name: "x" } }),
+      ),
+    ).toBeNull();
+    const valid = newFirearmBuild(rules, "pistol");
+    expect(parseWeaponExport(JSON.stringify({ schema: "ashen-skies/weapon@1", build: valid }))).toEqual(valid);
   });
 });

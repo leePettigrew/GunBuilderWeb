@@ -18,6 +18,7 @@ import {
 } from "react";
 import type { AnyBuild, Ruleset, Weapon } from "@shared/types";
 import { DEFAULT_RULESET } from "@shared/default-rules";
+import { validateBuild } from "@shared/validate-build";
 import { newId, nowISO, type ID } from "@shared/ids";
 import { createBrowserPersistence, type PersistenceAdapter } from "./persistence";
 
@@ -57,11 +58,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const p = persistence();
     const storedWeapons = p.load<Weapon[]>(WEAPONS_KEY);
     if (Array.isArray(storedWeapons)) {
-      weaponsRef.current = storedWeapons;
-      setWeapons(storedWeapons);
+      // Drop structurally corrupt entries (tampered storage, bad old imports)
+      // rather than letting one poisoned build crash every armory render.
+      const sound = storedWeapons.filter(
+        (w) => w !== null && typeof w === "object" && typeof w.id === "string" && validateBuild(w.build) !== null,
+      );
+      weaponsRef.current = sound;
+      setWeapons(sound);
+      if (sound.length !== storedWeapons.length) p.save(WEAPONS_KEY, sound);
     }
     const storedRuleset = p.load<Ruleset>(RULESET_KEY);
-    if (storedRuleset !== null && typeof storedRuleset === "object") {
+    if (
+      storedRuleset !== null &&
+      typeof storedRuleset === "object" &&
+      !Array.isArray(storedRuleset) &&
+      storedRuleset.schemaVersion === 1
+    ) {
       setRulesetState(storedRuleset);
     }
     setReady(true);

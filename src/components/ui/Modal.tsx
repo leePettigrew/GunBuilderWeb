@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { IconX } from "./icons";
 
 export interface ModalProps {
@@ -11,20 +11,41 @@ export interface ModalProps {
   footer?: ReactNode;
 }
 
+// Module-level modal stack so stacked modals (e.g. import → confirm on
+// /rules) cooperate: the body scroll lock is reference-counted and ESC only
+// dismisses the top-most dialog.
+const modalStack: symbol[] = [];
+let savedBodyOverflow = "";
+
 export function Modal({ open, onClose, title, children, footer }: ModalProps) {
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    const token = Symbol("modal");
+    modalStack.push(token);
+    if (modalStack.length === 1) {
+      savedBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+
+    const previouslyFocused = document.activeElement;
+    panelRef.current?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && modalStack[modalStack.length - 1] === token) onClose();
     };
     window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      const index = modalStack.indexOf(token);
+      if (index !== -1) modalStack.splice(index, 1);
+      if (modalStack.length === 0) document.body.style.overflow = savedBodyOverflow;
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      }
     };
   }, [open, onClose]);
 
@@ -39,10 +60,12 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       }}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="surface-raised flex max-h-[85vh] w-full max-w-lg animate-fade-in flex-col"
+        className="surface-raised flex max-h-[85vh] w-full max-w-lg animate-fade-in flex-col outline-none"
       >
         <header className="flex items-center justify-between gap-4 border-b border-rivet/40 px-4 py-3">
           <h2 id={titleId} className="heading-stencil truncate text-sm text-bone">

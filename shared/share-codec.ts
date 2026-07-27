@@ -6,6 +6,7 @@
  */
 
 import type { AnyBuild } from "./types";
+import { validateBuild } from "./validate-build";
 
 interface ShareEnvelope {
   v: 1;
@@ -41,11 +42,8 @@ export function decodeShare(payload: string): AnyBuild | null {
   try {
     const json = new TextDecoder().decode(fromBase64Url(payload.trim()));
     const envelope = JSON.parse(json) as Partial<ShareEnvelope>;
-    if (envelope.v !== 1 || typeof envelope.build !== "object" || envelope.build === null) return null;
-    const build = envelope.build as AnyBuild;
-    if (!["firearm", "bow", "crossbow", "grenade", "melee"].includes(build.family)) return null;
-    if (typeof build.name !== "string") return null;
-    return build;
+    if (envelope.v !== 1) return null;
+    return validateBuild(envelope.build);
   } catch {
     return null;
   }

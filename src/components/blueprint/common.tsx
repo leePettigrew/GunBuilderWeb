@@ -34,6 +34,11 @@ function RegMark({ x, y }: { x: number; y: number }) {
 }
 
 export function HatchDefs() {
+  // The pattern id repeats when several blueprints share a page (armory
+  // grid). That's tolerated deliberately: every instance defines an identical
+  // pattern, and url(#bp-hatch) resolves to the first one document-wide, so
+  // rendering is correct. Making ids unique would force threading an id
+  // through every family's fill="url(#…)" for zero visual gain.
   return (
     <defs>
       <pattern id="bp-hatch" width={6} height={6} patternUnits="userSpaceOnUse">

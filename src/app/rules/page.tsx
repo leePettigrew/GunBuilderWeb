@@ -23,6 +23,12 @@ export default function RulesPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportText("");
+    setImportError(null);
+  };
+
   const tryImport = (json: string) => {
     const parsed = parseRulesetExport(json);
     if (parsed === null) {
@@ -73,14 +79,11 @@ export default function RulesPage() {
 
       <Modal
         open={importOpen}
-        onClose={() => {
-          setImportOpen(false);
-          setImportError(null);
-        }}
+        onClose={closeImport}
         title="Import ruleset"
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setImportOpen(false)}>
+            <Button variant="ghost" onClick={closeImport}>
               Cancel
             </Button>
             <Button variant="primary" onClick={() => tryImport(importText)} disabled={importText.trim() === ""}>
@@ -97,12 +100,14 @@ export default function RulesPage() {
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             rows={8}
+            aria-label="Ruleset JSON"
             className="w-full rounded-card border border-rivet/40 bg-steel-950/60 p-3 font-mono text-xs text-bone focus:border-ember/60 focus:outline-none"
             placeholder='{"schema":"ashen-skies/ruleset@1", …}'
           />
           <input
             ref={fileRef}
             type="file"
+            aria-label="Ruleset file"
             accept="application/json,.json"
             className="block w-full text-xs text-bone-faint file:mr-3 file:rounded-card file:border-0 file:bg-steel-700 file:px-3 file:py-1.5 file:text-xs file:text-bone"
             onChange={(e) => {
@@ -129,8 +134,7 @@ export default function RulesPage() {
         onConfirm={() => {
           if (pendingImport !== null) setRuleset(pendingImport);
           setPendingImport(null);
-          setImportOpen(false);
-          setImportText("");
+          closeImport();
         }}
         onCancel={() => setPendingImport(null)}
       />

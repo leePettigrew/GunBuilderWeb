@@ -128,7 +128,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] animate-fade-in flex-col border-r border-rivet/40 bg-steel-900 shadow-raised"
           >
             <div className="flex items-center justify-between px-5 pb-4 pt-5">
-              <Wordmark compact />
+              {/* Capture so the wordmark's home link also dismisses the menu. */}
+              <span onClickCapture={() => setMenuOpen(false)}>
+                <Wordmark compact />
+              </span>
               <button
                 type="button"
                 onClick={() => setMenuOpen(false)}

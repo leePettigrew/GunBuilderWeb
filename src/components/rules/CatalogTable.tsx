@@ -46,7 +46,8 @@ export interface ColumnDef<T> {
 export function parseDiceExpr(text: string): DiceExpr | null {
   const cleaned = text.replace(/\s+/g, "").toLowerCase();
   if (cleaned === "" || cleaned === "0") return { terms: [], bonus: 0 };
-  const parts = cleaned.split("+");
+  // Normalize minus signs into +- so "2d10-3" splits into ["2d10", "-3"].
+  const parts = cleaned.replace(/-/g, "+-").split("+").filter((p) => p !== "");
   const expr: DiceExpr = { terms: [], bonus: 0 };
   for (const part of parts) {
     const dice = /^(\d+)d(\d+)$/.exec(part);
@@ -54,7 +55,7 @@ export function parseDiceExpr(text: string): DiceExpr | null {
       expr.terms.push({ count: Number(dice[1]), size: Number(dice[2]) });
       continue;
     }
-    if (/^\d+$/.test(part)) {
+    if (/^-?\d+$/.test(part)) {
       expr.bonus += Number(part);
       continue;
     }
@@ -71,11 +72,13 @@ function DraftInput({
   commit,
   align = "right",
   title,
+  ariaLabel,
 }: {
   shown: string;
   commit: (text: string) => void;
   align?: "left" | "right";
   title?: string;
+  ariaLabel?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   return (
@@ -83,6 +86,7 @@ function DraftInput({
       type="text"
       value={draft ?? shown}
       title={title}
+      aria-label={ariaLabel}
       onChange={(e) => {
         setDraft(e.target.value);
         commit(e.target.value);
@@ -99,6 +103,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "text":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={typeof raw === "string" ? raw : ""}
           align="left"
           commit={(text) => onEdit(text)}
@@ -107,6 +112,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "number":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={typeof raw === "number" ? String(raw) : "0"}
           commit={(text) => {
             const n = Number(text);
@@ -117,6 +123,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "nullnumber":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={typeof raw === "number" ? String(raw) : ""}
           title="Blank = varies / open-ended"
           commit={(text) => {
@@ -133,6 +140,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "percent":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={typeof raw === "number" ? String(Math.round(raw * 1000) / 10) : "0"}
           title="Percent"
           commit={(text) => {
@@ -145,6 +153,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
       return (
         <select
           value={typeof raw === "string" ? raw : ""}
+          aria-label={col.label}
           onChange={(e) => onEdit(e.target.value)}
           className={cellClasses}
         >
@@ -168,6 +177,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "csv":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={Array.isArray(raw) ? (raw as string[]).join(", ") : ""}
           align="left"
           title="Comma-separated"
@@ -184,6 +194,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "malusCsv":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={Array.isArray(raw) ? (raw as (number | null)[]).map((v) => (v === null ? "x" : String(v))).join(", ") : ""}
           align="left"
           title="Comma-separated; x = varies / not possible"
@@ -201,6 +212,7 @@ function Cell<T>({ item, col, onEdit }: { item: T; col: ColumnDef<T>; onEdit: (v
     case "dice":
       return (
         <DraftInput
+          ariaLabel={col.label}
           shown={raw !== null && typeof raw === "object" ? formatDice(raw as DiceExpr) : "0"}
           align="left"
           title='Dice expression, e.g. "2d10+1d8+3"'
@@ -295,7 +307,23 @@ export function CatalogTable<T>({
         </table>
       </div>
       {makeBlank !== undefined && (
-        <Button size="sm" variant="ghost" onClick={() => onChange([...items, makeBlank()])}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            // Uniquify the blank's id so repeated adds never collide.
+            const blank = makeBlank() as Record<string, unknown>;
+            if (typeof blank.id === "string") {
+              const existing = new Set(items.map((it) => (it as Record<string, unknown>).id));
+              const base = blank.id;
+              let id = base;
+              let n = 2;
+              while (existing.has(id)) id = `${base}-${n++}`;
+              blank.id = id;
+            }
+            onChange([...items, blank as T]);
+          }}
+        >
           <IconPlus className="mr-1 h-3.5 w-3.5" />
           {addLabel}
         </Button>

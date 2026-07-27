@@ -34,19 +34,22 @@ export function BuilderWorkbench({ family, weaponId }: BuilderWorkbenchProps) {
   const { create, update } = useWeapons();
   const { weapon, ready } = useWeapon(weaponId ?? "");
 
-  const [build, setBuild] = useState<AnyBuild | null>(() =>
-    weaponId === undefined ? newBuildForFamily(family, ruleset) : null,
-  );
+  const [build, setBuild] = useState<AnyBuild | null>(null);
   const [savedId, setSavedId] = useState<string | null>(weaponId ?? null);
   const [flash, setFlash] = useState<Flash | null>(null);
   const flashTimer = useRef<number | null>(null);
 
-  // Edit mode: seed local state from the armory once the store is ready.
+  // Seed only once the store is ready: new builds must derive from the
+  // PERSISTED ruleset (custom catalogs included), not the pre-load default;
+  // edit mode seeds from the armory entry.
   useEffect(() => {
-    if (weaponId !== undefined && ready && weapon !== null && build === null) {
+    if (!ready || build !== null) return;
+    if (weaponId === undefined) {
+      setBuild(newBuildForFamily(family, ruleset));
+    } else if (weapon !== null) {
       setBuild(weapon.build);
     }
-  }, [weaponId, ready, weapon, build]);
+  }, [ready, build, weaponId, weapon, family, ruleset]);
 
   useEffect(() => {
     return () => {

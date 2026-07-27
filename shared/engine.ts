@@ -33,17 +33,19 @@ import type {
 // ---------------------------------------------------------------------------
 
 export function formatDice(expr: DiceExpr): string {
-  const parts = expr.terms
+  const dice = expr.terms
     .filter((t) => t.count > 0)
-    .map((t) => `${t.count}d${t.size}`);
-  if (expr.bonus > 0) parts.push(String(expr.bonus));
-  if (parts.length === 0) return "0";
-  return parts.join("+");
+    .map((t) => `${t.count}d${t.size}`)
+    .join("+");
+  if (expr.bonus > 0) return dice === "" ? `${expr.bonus}` : `${dice}+${expr.bonus}`;
+  if (expr.bonus < 0) return dice === "" ? `${expr.bonus}` : `${dice}${expr.bonus}`;
+  return dice === "" ? "0" : dice;
 }
 
+/** Average of the expression, floored at 0 — a hit never heals. */
 export function averageDamage(expr: DiceExpr): number {
   const dice = expr.terms.reduce((sum, t) => sum + (t.count * (t.size + 1)) / 2, 0);
-  return Math.round((dice + expr.bonus) * 10) / 10;
+  return Math.max(0, Math.round((dice + expr.bonus) * 10) / 10);
 }
 
 function scaleDiceCount(expr: DiceExpr, multiplier: number, divisor: number): DiceExpr {
@@ -64,16 +66,26 @@ export function findById<T extends { id: string }>(list: T[], id: string | undef
   return id === undefined ? undefined : list.find((x) => x.id === id);
 }
 
-/** Pick the band containing `value`; clamps to the nearest band outside the table. */
+/**
+ * Pick the band containing `value`. Values outside every band — below the
+ * table, above it, or in an interior gap between integer-contiguous bands
+ * (e.g. 700.5 J between "…–700" and "701–…") — resolve to the NEAREST band
+ * by boundary distance; ties go to the lower band.
+ */
 function pickBand<T extends { min: number; max: number }>(bands: T[], value: number): T | undefined {
   if (bands.length === 0) return undefined;
   const sorted = [...bands].sort((a, b) => a.min - b.min);
+  let nearest: T | undefined;
+  let nearestDist = Infinity;
   for (const band of sorted) {
     if (value >= band.min && value <= band.max) return band;
+    const dist = value < band.min ? band.min - value : value - band.max;
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = band;
+    }
   }
-  const first = sorted[0]!;
-  if (value < first.min) return first;
-  return sorted[sorted.length - 1];
+  return nearest;
 }
 
 function round2(n: number): number {

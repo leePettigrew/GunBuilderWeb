@@ -19,7 +19,6 @@ import {
   DimensionLine,
   HatchDefs,
   stroke,
-  strokeAccent,
   strokeThin,
 } from "./common";
 
@@ -321,7 +320,7 @@ function barrelAssembly(
       />,
     );
   }
-  if (barrelTypeId === "fluted") {
+  if (barrelTypeId === "fluted" && barrelPx > 34) {
     parts.push(
       <g key="flutes">
         <line x1={x0 + 14} y1={y - half / 2} x2={x1 - 12} y2={y - half / 2} {...strokeThin} />
@@ -346,13 +345,15 @@ function barrelAssembly(
       </g>,
     );
   }
-  // SMG perforated shroud homage
+  // SMG perforated shroud homage — only holes that fit the drawn barrel
   if (build.frameId === "smg") {
     parts.push(
       <g key="shroud">
-        {[14, 32, 50, 68].map((o) => (
-          <circle key={o} cx={x0 + o} cy={y} r={2.5} {...strokeThin} />
-        ))}
+        {[14, 32, 50, 68]
+          .filter((o) => o < barrelPx - 8)
+          .map((o) => (
+            <circle key={o} cx={x0 + o} cy={y} r={2.5} {...strokeThin} />
+          ))}
       </g>,
     );
   }
@@ -523,8 +524,24 @@ export function FirearmBlueprint({
       )}
       {firstAttachment && (
         <CalloutLabel
-          x={firstAttachment.anchor === "muzzle" ? tipX - 12 : g.rx0 + 80}
-          y={firstAttachment.anchor === "muzzle" ? g.barrelY : firstAttachment.anchor === "rail" ? g.top - 30 : g.bot + 20}
+          x={
+            firstAttachment.anchor === "muzzle"
+              ? tipX - 12
+              : firstAttachment.anchor === "rail"
+                ? g.rx0 + 80
+                : firstAttachment.anchor === "side"
+                  ? g.rx1 + 20
+                  : g.rx1 + 40 // underbarrel devices hang off the handguard
+          }
+          y={
+            firstAttachment.anchor === "muzzle"
+              ? g.barrelY
+              : firstAttachment.anchor === "rail"
+                ? g.top - 30
+                : firstAttachment.anchor === "side"
+                  ? g.barrelY - g.barrelHalf - 12
+                  : g.barrelY + g.barrelHalf + 20
+          }
           tx={Math.min(tipX + 10, 700)}
           ty={64}
           text={firstAttachment.label}

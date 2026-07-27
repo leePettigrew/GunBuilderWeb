@@ -144,7 +144,15 @@ export function RulesLab() {
           ]}
           onChange={(rows) =>
             patch((d) => {
-              d.firearms.platformRangeMalus = Object.fromEntries(rows.map((r) => [r.id, r.malus]));
+              // Suffix colliding ids instead of silently dropping rows.
+              const record: Record<string, (number | null)[]> = {};
+              for (const row of rows) {
+                let key = row.id;
+                let n = 2;
+                while (key in record) key = `${row.id}-${n++}`;
+                record[key] = row.malus;
+              }
+              d.firearms.platformRangeMalus = record;
             })
           }
           makeBlank={() => ({ id: "newPlatform", malus: f.rangeBands.map(() => 0) })}
@@ -435,7 +443,9 @@ export function RulesLab() {
             patch((d) => {
               const values = text
                 .split(",")
-                .map((s) => Number(s.trim()))
+                .map((s) => s.trim())
+                .filter((s) => s !== "")
+                .map(Number)
                 .filter((n) => Number.isFinite(n));
               if (values.length > 0) d.grenades.falloffQuarters = values;
             })
@@ -519,7 +529,7 @@ export function RulesLab() {
                 { value: "str", label: "STR" },
                 { value: "dex", label: "DEX" },
               ],
-              width: "w-18",
+              width: "w-20",
             },
             { key: "dieSize", label: "Die", kind: "number", width: "w-14" },
             { key: "baseWeightKg", label: "Kg", kind: "number", width: "w-16" },

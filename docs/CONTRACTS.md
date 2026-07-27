@@ -173,7 +173,8 @@ The centerpiece. Code-drawn parametric SVG, blueprint-schematic style.
 - **Bow**: riser + limbs + string, limb span scales with `drawLengthIn`, limb
   thickness with `drawWeightLbs`, silhouette per type (longbow D-curve,
   compound cams + cables, improvised lashings…), nocked arrow drawn from the
-  selected `ArrowDef` (head shape per type), draw-weight `DimensionLine`.
+  selected `ArrowDef` (head shape per type), a draw-length `DimensionLine`
+  plus a draw-weight `CalloutLabel`.
 - **Crossbow**: stock + prod + string + stirrup, size per type (pistol tiny →
   siege with windlass crank + second grip).
 - **Grenade**: casing per focus/payload combo (frag sphere with crosshatch,

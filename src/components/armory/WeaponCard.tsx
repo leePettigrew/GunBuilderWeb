@@ -53,7 +53,14 @@ export interface WeaponCardProps {
 export function WeaponCard({ weapon, rules, onDelete, className }: WeaponCardProps) {
   const { build } = weapon;
   // Stats computed at render: Rules Lab edits re-stat every card automatically.
-  const stats = useMemo(() => computeStats(build, rules), [build, rules]);
+  // Guarded so one corrupt build can never take the whole armory grid down.
+  const stats = useMemo(() => {
+    try {
+      return computeStats(build, rules) ?? null;
+    } catch {
+      return null;
+    }
+  }, [build, rules]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -67,6 +74,27 @@ export function WeaponCard({ weapon, rules, onDelete, className }: WeaponCardPro
   };
 
   const name = build.name || "Unnamed pattern";
+
+  if (stats === null) {
+    // Corrupt or engine-incompatible build: keep the card renderable so the
+    // user can still inspect the name and scrap it.
+    return (
+      <article className={cn("surface-panel flex flex-col gap-3 p-4 animate-fade-in", className)}>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="heading-stencil text-lg leading-tight">{name}</h3>
+          <Badge tone="blood">Corrupt</Badge>
+        </div>
+        <p className="text-sm text-bone-soft">
+          This pattern can&apos;t be computed under the active ruleset — its data is damaged.
+        </p>
+        <div className="mt-auto flex justify-end">
+          <Button variant="danger" size="sm" onClick={onDelete}>
+            <IconTrash className="mr-1 h-4 w-4" /> Scrap
+          </Button>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className={cn("surface-panel flex flex-col overflow-hidden animate-fade-in", className)}>

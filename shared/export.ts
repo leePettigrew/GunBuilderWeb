@@ -6,6 +6,7 @@
 import { computeStats } from "./engine";
 import { nowISO } from "./ids";
 import type { AnyBuild, Ruleset, RulesetExport, WeaponExport } from "./types";
+import { validateBuild } from "./validate-build";
 
 export function exportWeapon(build: AnyBuild, rules: Ruleset): WeaponExport {
   const stats = computeStats(build, rules);
@@ -46,8 +47,8 @@ export function parseRulesetExport(json: string): Ruleset | null {
 export function parseWeaponExport(json: string): AnyBuild | null {
   try {
     const parsed = JSON.parse(json) as Partial<WeaponExport>;
-    if (parsed.schema !== "ashen-skies/weapon@1" || !parsed.build) return null;
-    return parsed.build;
+    if (parsed.schema !== "ashen-skies/weapon@1") return null;
+    return validateBuild(parsed.build);
   } catch {
     return null;
   }
