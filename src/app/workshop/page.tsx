@@ -150,6 +150,36 @@ export default function WorkshopPage() {
     }));
   }, []);
 
+  // socket availability from the page's view of placements (base sockets +
+  // rail-provided ones); used to disable Spawn and show mounted counts
+  const occupiedIds = useMemo(
+    () => new Set(state.placed.filter((p) => p.attachedTo !== null).map((p) => p.attachedTo as string)),
+    [state.placed],
+  );
+  const providedRailIds = useMemo(
+    () =>
+      state.placed
+        .filter((p) => p.attachedTo !== null && PIECES.find((d) => d.id === p.pieceId)?.provides !== undefined)
+        .map((p) => `railTop@${p.key}`),
+    [state.placed],
+  );
+  const socketTypeFree = useCallback(
+    (t: PieceDef["socket"]): boolean => {
+      const ids = t === "railTop" ? ["railTop", ...providedRailIds] : [t as string];
+      return ids.some((id) => !occupiedIds.has(id));
+    },
+    [occupiedIds, providedRailIds],
+  );
+  const mountedByCategory = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of state.placed) {
+      if (p.attachedTo === null) continue;
+      const d = PIECES.find((x) => x.id === p.pieceId);
+      if (d) counts.set(d.category, (counts.get(d.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [state.placed]);
+
   const selected = state.placed.find((p) => p.key === state.selectedKey) ?? null;
   const selectedDef = selected ? PIECES.find((p) => p.id === selected.pieceId) : null;
   const credits = useMemo(() => {
@@ -261,12 +291,25 @@ export default function WorkshopPage() {
                 if (items.length === 0) return null;
                 return (
                   <div key={key}>
-                    <p className="mb-1 font-display text-[10px] uppercase tracking-stamp text-bone-faint">{label}</p>
+                    <p className="mb-1 flex items-center gap-2 font-display text-[10px] uppercase tracking-stamp text-bone-faint">
+                      {label}
+                      {(mountedByCategory.get(key) ?? 0) > 0 && (
+                        <span className="rounded-sm border border-olive/50 px-1 text-[9px] text-olive">
+                          {mountedByCategory.get(key)} fitted
+                        </span>
+                      )}
+                    </p>
                     <div className="space-y-1">
                       {items.map((p) => (
                         <div key={p.id} className="flex items-center justify-between gap-2 rounded-card border border-rivet/30 bg-steel-900/60 px-2 py-1.5">
                           <span className="text-xs text-bone-soft">{p.label}</span>
-                          <Button size="sm" variant="ghost" onClick={() => spawnPiece(p.id)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!socketTypeFree(p.socket)}
+                            title={socketTypeFree(p.socket) ? undefined : "No free anchor of this type — strip something or fit a rail"}
+                            onClick={() => spawnPiece(p.id)}
+                          >
                             Spawn
                           </Button>
                         </div>

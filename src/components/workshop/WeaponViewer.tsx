@@ -210,6 +210,12 @@ function useWeapon(def: WeaponModelDef) {
         ),
       },
     ];
+    if (def.socketOverrides) {
+      for (const s2 of sockets) {
+        const o = def.socketOverrides[s2.id as keyof typeof def.socketOverrides];
+        if (o) s2.pos.set(o[0], o[1], o[2]);
+      }
+    }
     return { holder, groups, sockets };
   }, [gltf.scene, def]);
 }

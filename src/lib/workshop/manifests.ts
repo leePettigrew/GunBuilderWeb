@@ -34,6 +34,8 @@ export interface WeaponModelDef {
   preRotation: [number, number, number];
   parts: [RegExp, PartId][];
   hidden?: RegExp;
+  /** Optional hand overrides for measured sockets (normalized gun space). */
+  socketOverrides?: Partial<Record<"muzzle" | "railTop" | "under" | "magwell", [number, number, number]>>;
 }
 
 export interface PieceDef {
@@ -87,6 +89,7 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
     url: "/models/sniper-rifle.glb",
     credit: { title: "Sniper Rifle", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/ASOMZIErq3" },
     preRotation: [0, 0, 0],
+    socketOverrides: { railTop: [0.16, 0.09, 0] }, // ahead of the integral scope
     parts: [
       [/bolt|slide/i, "slide"],
       [/mag/i, "mag"],
