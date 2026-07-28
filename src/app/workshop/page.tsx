@@ -1,144 +1,238 @@
 "use client";
 
 /**
- * The 3D Workshop — Tarkov-style inspect bench for pistol-class weapons.
- * Real sourced models (CC/PD), unified armory-clay finish or original
- * textures, socketed attachments, part toggles and exploded view.
+ * The 3D Workshop — Tarkov-style bench. Spawn pieces from the inventory,
+ * drag them onto glowing anchor points to mount them, pull them off again,
+ * rotate/scale with gizmos, blow the gun apart or lay every part out flat.
  */
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
-import { WEAPON_MODELS, ATTACHMENT_MODELS, type PartId } from "@/lib/workshop/manifests";
-import type { WorkshopState } from "@/components/workshop/WeaponViewer";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  PIECES,
+  SLIDE_FINISHES,
+  WEAPON_MODELS,
+  type PieceDef,
+  type PlacedPiece,
+} from "@/lib/workshop/manifests";
+import type { ViewerCallbacks, WorkshopState } from "@/components/workshop/WeaponViewer";
 import { PART_LABELS } from "@/components/workshop/WeaponViewer";
+import type { PartId } from "@/lib/workshop/manifests";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { SelectField, Toggle } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 const WeaponViewer = dynamic(
   () => import("@/components/workshop/WeaponViewer").then((m) => m.WeaponViewer),
-  { ssr: false, loading: () => <div className="surface-inset h-[520px] animate-pulse" /> },
+  { ssr: false, loading: () => <div className="surface-inset h-[560px] animate-pulse" /> },
 );
 
+const CATEGORY_ORDER: { key: PieceDef["category"]; label: string }[] = [
+  { key: "suppressor", label: "Suppressors" },
+  { key: "muzzle", label: "Muzzle devices" },
+  { key: "rail", label: "Rails" },
+  { key: "optic", label: "Optics" },
+  { key: "magazine", label: "Magazines" },
+  { key: "grip", label: "Grips" },
+  { key: "laser", label: "Lasers" },
+  { key: "light", label: "Lights" },
+];
+
 export default function WorkshopPage() {
+  const keyCounter = useRef(0);
   const [state, setState] = useState<WorkshopState>({
     modelId: "glockModular",
-    attachmentIds: ["suppressor", "redDot"],
-    magMode: "standard",
-    slideOn: true,
+    view: "assembled",
+    explode: 0,
     clay: true,
-    exploded: 0,
     spin: false,
+    finish: "gunmetal",
+    placed: [
+      { key: "seed-1", pieceId: "suppressorSlim", attachedTo: "muzzle", pos: [0.7, 0.3, 0], rot: [0, 0, 0], scale: [1, 1, 1] },
+      { key: "seed-2", pieceId: "redDot", attachedTo: "railTop", pos: [0, 0.5, 0], rot: [0, 0, 0], scale: [1, 1, 1] },
+    ],
+    selectedKey: null,
+    gizmo: "off",
   });
   const [hoveredPart, setHoveredPart] = useState<PartId | null>(null);
-  const [selectedPart, setSelectedPart] = useState<PartId | null>(null);
 
   const patch = (p: Partial<WorkshopState>) => setState((s) => ({ ...s, ...p }));
-  const toggleAttachment = (id: string) =>
-    patch({
-      attachmentIds: state.attachmentIds.includes(id)
-        ? state.attachmentIds.filter((a) => a !== id)
-        : [...state.attachmentIds, id],
-    });
+
+  const spawnPiece = (pieceId: string) => {
+    keyCounter.current += 1;
+    const key = `p${keyCounter.current}`;
+    setState((s) => ({
+      ...s,
+      selectedKey: key,
+      placed: [
+        ...s.placed,
+        {
+          key,
+          pieceId,
+          attachedTo: null,
+          // spawn loose on the bench in front of the gun
+          pos: [-0.25 + (s.placed.length % 4) * 0.22, -0.28, 0.4],
+          rot: [0, 0, 0],
+          scale: [1, 1, 1],
+        },
+      ],
+    }));
+  };
+
+  const cb = useMemo<ViewerCallbacks>(
+    () => ({
+      updatePiece: (key, piecePatch) =>
+        setState((s) => ({
+          ...s,
+          placed: s.placed.map((p) => (p.key === key ? { ...p, ...piecePatch } : p)),
+        })),
+      selectPiece: (key) => setState((s) => ({ ...s, selectedKey: key })),
+      onHoverPart: setHoveredPart,
+    }),
+    [],
+  );
+
+  const removeSelected = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      placed: s.placed.filter((p) => p.key !== s.selectedKey),
+      selectedKey: null,
+    }));
+  }, []);
+
+  const selected = state.placed.find((p) => p.key === state.selectedKey) ?? null;
+  const selectedDef = selected ? PIECES.find((p) => p.id === selected.pieceId) : null;
+  const credits = useMemo(() => {
+    const list = [...WEAPON_MODELS.map((m) => m.credit)];
+    for (const p of PIECES) if (p.credit) list.push(p.credit);
+    return list;
+  }, []);
 
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
         eyebrow="3D bench — experimental"
         title="Workshop"
-        description="Inspect and customize on real sourced models. Drag to orbit, scroll to zoom, hover parts to identify them, click to select."
+        description="Spawn pieces, drag them onto the glowing anchors to mount them, drag them off to strip the gun. Select a piece and use the gizmos to rotate or stretch it."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {hoveredPart !== null && <Badge tone="ember">{PART_LABELS[hoveredPart]}</Badge>}
-            {selectedPart !== null && <Badge tone="hazard">Selected: {PART_LABELS[selectedPart]}</Badge>}
+            {selectedDef != null && <Badge tone="hazard">{selectedDef.label}</Badge>}
           </div>
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
-        <div className="surface-panel overflow-hidden">
-          <WeaponViewer
-            state={state}
-            onHoverPart={setHoveredPart}
-            onSelectPart={setSelectedPart}
-            className="h-[560px] w-full"
-          />
+      <div className="grid items-start gap-6 xl:grid-cols-[1fr_330px]">
+        <div className="space-y-3">
+          <div className="surface-panel overflow-hidden">
+            <WeaponViewer state={state} cb={cb} className="h-[600px] w-full" />
+          </div>
+          {/* view + manipulation toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={state.view === "assembled" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => patch({ view: "assembled" })}
+            >
+              Assembled
+            </Button>
+            <Button
+              variant={state.view === "bench" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => patch({ view: "bench", explode: 0 })}
+            >
+              Lay out all parts
+            </Button>
+            <span className="mx-1 h-5 w-px bg-rivet/50" />
+            <label className="flex items-center gap-2 text-xs uppercase tracking-title text-bone-soft">
+              Explode
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={state.explode}
+                disabled={state.view === "bench"}
+                onChange={(e) => patch({ explode: Number(e.target.value), view: "assembled" })}
+                className="w-36 accent-[rgb(var(--c-ember))]"
+                aria-label="Exploded view"
+              />
+            </label>
+            <span className="mx-1 h-5 w-px bg-rivet/50" />
+            {(["off", "rotate", "scale"] as const).map((mode) => (
+              <Button
+                key={mode}
+                variant={state.gizmo === mode ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => patch({ gizmo: mode })}
+              >
+                {mode === "off" ? "Drag" : mode === "rotate" ? "Rotate" : "Stretch"}
+              </Button>
+            ))}
+            {selected !== null && (
+              <Button variant="danger" size="sm" onClick={removeSelected}>
+                Scrap selected
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4">
           <Panel title="Platform" tone="raised">
-            <SelectField
-              label="Base model"
-              value={state.modelId}
-              onChange={(modelId) => patch({ modelId })}
-              options={WEAPON_MODELS.map((m) => ({ value: m.id, label: m.label }))}
-            />
-          </Panel>
-
-          <Panel title="Parts" tone="raised">
             <div className="space-y-3">
               <SelectField
-                label="Magazine"
-                value={state.magMode}
-                onChange={(v) => patch({ magMode: v as WorkshopState["magMode"] })}
-                options={[
-                  { value: "standard", label: "Standard magazine" },
-                  { value: "extended", label: "Extended magazine" },
-                  { value: "removed", label: "Removed" },
-                ]}
+                label="Base model"
+                value={state.modelId}
+                onChange={(modelId) => patch({ modelId })}
+                options={WEAPON_MODELS.map((m) => ({ value: m.id, label: m.label }))}
               />
-              <Toggle label="Slide fitted" checked={state.slideOn} onChange={(slideOn) => patch({ slideOn })} />
-            </div>
-          </Panel>
-
-          <Panel title="Attachments" tone="raised">
-            <div className="space-y-2">
-              {ATTACHMENT_MODELS.map((a) => (
-                <Toggle
-                  key={a.id}
-                  label={`${a.label} (${a.socket})`}
-                  checked={state.attachmentIds.includes(a.id)}
-                  onChange={() => toggleAttachment(a.id)}
-                />
-              ))}
-            </div>
-          </Panel>
-
-          <Panel title="Finish & view" tone="raised">
-            <div className="space-y-3">
+              <SelectField
+                label="Slide finish"
+                value={state.finish}
+                onChange={(finish) => patch({ finish })}
+                options={SLIDE_FINISHES.map((f) => ({ value: f.id, label: f.label }))}
+              />
               <Toggle label="Armory clay finish" checked={state.clay} onChange={(clay) => patch({ clay })} hint="Off = the model's own materials" />
               <Toggle label="Turntable spin" checked={state.spin} onChange={(spin) => patch({ spin })} />
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-title text-bone-soft">
-                  Exploded view
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={state.exploded}
-                  onChange={(e) => patch({ exploded: Number(e.target.value) })}
-                  className="w-full accent-[rgb(var(--c-ember))]"
-                  aria-label="Exploded view"
-                />
-              </label>
+            </div>
+          </Panel>
+
+          <Panel title="Inventory" tone="raised" bodyClassName="p-3">
+            <div className="max-h-[380px] space-y-3 overflow-y-auto pr-1">
+              {CATEGORY_ORDER.map(({ key, label }) => {
+                const items = PIECES.filter((p) => p.category === key);
+                if (items.length === 0) return null;
+                return (
+                  <div key={key}>
+                    <p className="mb-1 font-display text-[10px] uppercase tracking-stamp text-bone-faint">{label}</p>
+                    <div className="space-y-1">
+                      {items.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between gap-2 rounded-card border border-rivet/30 bg-steel-900/60 px-2 py-1.5">
+                          <span className="text-xs text-bone-soft">{p.label}</span>
+                          <Button size="sm" variant="ghost" onClick={() => spawnPiece(p.id)}>
+                            Spawn
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Panel>
 
           <Panel title="Model credits" tone="inset">
             <ul className="space-y-1 text-xs text-bone-faint">
-              {[...WEAPON_MODELS.map((m) => m.credit), ...ATTACHMENT_MODELS.flatMap((a) => (a.credit ? [a.credit] : []))].map(
-                (c) => (
-                  <li key={c.source}>
-                    <a href={c.source} target="_blank" rel="noreferrer" className="underline decoration-rivet hover:text-bone-soft">
-                      {c.title}
-                    </a>{" "}
-                    — {c.author} ({c.license})
-                  </li>
-                ),
-              )}
+              {credits.map((c) => (
+                <li key={c.source}>
+                  <a href={c.source} target="_blank" rel="noreferrer" className="underline decoration-rivet hover:text-bone-soft">
+                    {c.title}
+                  </a>{" "}
+                  — {c.author} ({c.license})
+                </li>
+              ))}
             </ul>
           </Panel>
         </div>

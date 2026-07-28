@@ -1,36 +1,54 @@
 /**
- * Workshop model manifests: how each sourced GLB is normalized (rotation to
- * muzzle-right, part-mesh grouping) and where its attachment sockets sit in
- * normalized space (gun scaled to length 1 along X, centered at origin).
+ * Workshop model + part manifests.
  *
- * All models sourced from poly.pizza under CC-BY / Public Domain — credits
- * rendered in the workshop footer.
+ * Weapons: sourced GLBs normalized to muzzle → +X, length 1. Sockets are
+ * MEASURED from part bounding boxes at load (see WeaponViewer), so the
+ * manifest only describes orientation, part grouping and credits.
+ *
+ * Pieces: the Tarkov-style attachment catalog. A piece is either a sourced
+ * GLB or a procedural build (modelled in code — bevelled lathes and slotted
+ * rails, not naked boxes). Pieces declare which socket TYPE they occupy and
+ * may PROVIDE new sockets when mounted (a rail segment offers `railTop`),
+ * which is what makes chained builds possible.
+ *
+ * All sourced models are CC-BY / Public Domain via poly.pizza — credited in
+ * the workshop footer.
  */
 
 export type PartId = "frame" | "slide" | "barrel" | "mag" | "trigger" | "misc";
 
-export interface SocketDef {
-  /** Position in normalized gun space (gun length = 1 along +X, muzzle at +X). */
-  pos: [number, number, number];
+export type SocketType = "muzzle" | "railTop" | "under" | "side" | "magwell";
+
+export interface Credit {
+  title: string;
+  author: string;
+  license: string;
+  source: string;
 }
 
 export interface WeaponModelDef {
   id: string;
   label: string;
   url: string;
-  credit: { title: string; author: string; license: string; source: string };
-  /** Euler rotation (radians) applied BEFORE normalization so muzzle faces +X. */
+  credit: Credit;
   preRotation: [number, number, number];
-  /** mesh-name regex → part group. First match wins; default "frame". */
   parts: [RegExp, PartId][];
-  /** Mesh names hidden by default (stray props baked into the model). */
   hidden?: RegExp;
-  sockets: {
-    muzzle: SocketDef;
-    rail: SocketDef;
-    under: SocketDef;
-    grip: SocketDef;
-  };
+}
+
+export interface PieceDef {
+  id: string;
+  label: string;
+  category: "suppressor" | "optic" | "magazine" | "rail" | "muzzle" | "grip" | "laser" | "light";
+  socket: SocketType;
+  /** GLB url, or null when the piece is modelled procedurally. */
+  url: string | null;
+  credit?: Credit;
+  preRotation: [number, number, number];
+  /** Length along X as a fraction of gun length (GLB pieces only). */
+  lengthFrac: number;
+  /** Sockets this piece provides once mounted, offset from its center. */
+  provides?: { type: SocketType; offset: [number, number, number] }[];
 }
 
 export const WEAPON_MODELS: WeaponModelDef[] = [
@@ -38,12 +56,7 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
     id: "glockModular",
     label: "G-Pattern (modular)",
     url: "/models/pistol-modular.glb",
-    credit: {
-      title: "Glock",
-      author: "J [CC-BY] via poly.pizza",
-      license: "CC-BY",
-      source: "https://poly.pizza/m/q3lsX3tSta",
-    },
+    credit: { title: "Glock", author: "J [CC-BY] via poly.pizza", license: "CC-BY", source: "https://poly.pizza/m/q3lsX3tSta" },
     preRotation: [0, Math.PI, 0],
     parts: [
       [/slide/i, "slide"],
@@ -54,23 +67,12 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
       [/body/i, "frame"],
     ],
     hidden: /bullet/i,
-    sockets: {
-      muzzle: { pos: [0.52, 0.1, 0] },
-      rail: { pos: [0.1, 0.22, 0] },
-      under: { pos: [0.3, -0.02, 0] },
-      grip: { pos: [-0.25, -0.28, 0] },
-    },
   },
   {
     id: "glock19",
     label: "G19 Pattern",
     url: "/models/glock19.glb",
-    credit: {
-      title: "Rigged Glock 19",
-      author: "PuKk [CC-BY] via poly.pizza",
-      license: "CC-BY",
-      source: "https://poly.pizza/m/gDhOo5jkNX",
-    },
+    credit: { title: "Rigged Glock 19", author: "PuKk [CC-BY] via poly.pizza", license: "CC-BY", source: "https://poly.pizza/m/gDhOo5jkNX" },
     preRotation: [0, Math.PI, 0],
     parts: [
       [/charger|slide/i, "slide"],
@@ -78,47 +80,91 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
       [/trigger$/i, "trigger"],
       [/base|frame/i, "frame"],
     ],
-    sockets: {
-      muzzle: { pos: [0.52, 0.1, 0] },
-      rail: { pos: [0.1, 0.22, 0] },
-      under: { pos: [0.3, -0.02, 0] },
-      grip: { pos: [-0.25, -0.28, 0] },
-    },
   },
 ];
 
-export interface AttachmentModelDef {
-  id: string;
-  label: string;
-  socket: keyof WeaponModelDef["sockets"];
-  /** GLB url, or null for procedurally built attachments. */
-  url: string | null;
-  credit?: { title: string; author: string; license: string; source: string };
-  preRotation: [number, number, number];
-  /** Length along X as a fraction of gun length. */
-  lengthFrac: number;
-}
-
-export const ATTACHMENT_MODELS: AttachmentModelDef[] = [
+export const PIECES: PieceDef[] = [
+  // --- muzzle devices ---
   {
-    id: "suppressor",
-    label: "Suppressor",
+    id: "suppressorA",
+    label: "Suppressor (surplus)",
+    category: "suppressor",
     socket: "muzzle",
     url: "/models/suppressor-a.glb",
     credit: { title: "Suppressor", author: "Quaternius via poly.pizza", license: "CC0", source: "https://poly.pizza/m/QWfBIqy0VW" },
     preRotation: [0, Math.PI / 2, 0],
     lengthFrac: 0.34,
   },
+  { id: "suppressorSlim", label: "Suppressor (slim can)", category: "suppressor", socket: "muzzle", url: null, preRotation: [0, 0, 0], lengthFrac: 0.3 },
+  { id: "suppressorHeavy", label: "Suppressor (heavy can)", category: "suppressor", socket: "muzzle", url: null, preRotation: [0, 0, 0], lengthFrac: 0.24 },
+  { id: "compensator", label: "Compensator", category: "muzzle", socket: "muzzle", url: null, preRotation: [0, 0, 0], lengthFrac: 0.09 },
+  // --- rail + optics (optics mount on railTop: the slide offers one, and a
+  // rail segment provides a raised one — Tarkov-style chaining) ---
+  {
+    id: "railSegment",
+    label: "Rail segment",
+    category: "rail",
+    socket: "railTop",
+    url: null,
+    preRotation: [0, 0, 0],
+    lengthFrac: 0.3,
+    provides: [{ type: "railTop", offset: [0, 0.03, 0] }],
+  },
+  { id: "redDot", label: "Red dot sight", category: "optic", socket: "railTop", url: null, preRotation: [0, 0, 0], lengthFrac: 0.12 },
+  {
+    id: "holoSight",
+    label: "Holo sight",
+    category: "optic",
+    socket: "railTop",
+    url: "/models/holo-sight.glb",
+    credit: { title: "Holographic Sight", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/9rPJxvm9sw" },
+    preRotation: [0, Math.PI / 2, 0],
+    lengthFrac: 0.14,
+  },
   {
     id: "scope",
     label: "Scope",
-    socket: "rail",
+    category: "optic",
+    socket: "railTop",
     url: "/models/scope.glb",
     credit: { title: "Rifle Scope", author: "sergeilihandristov [CC-BY] via poly.pizza", license: "CC-BY", source: "https://poly.pizza/m/00FLhNqY7M" },
     preRotation: [0, Math.PI / 2, 0],
-    lengthFrac: 0.28,
+    lengthFrac: 0.26,
   },
-  { id: "redDot", label: "Red Dot", socket: "rail", url: null, preRotation: [0, 0, 0], lengthFrac: 0.14 },
-  { id: "laser", label: "Laser", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.1 },
-  { id: "flashlight", label: "Flashlight", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.11 },
+  // --- magazines (mount at the magwell; fitting one hides the stock mag) ---
+  { id: "magExtended", label: "Extended magazine", category: "magazine", socket: "magwell", url: null, preRotation: [0, 0, 0], lengthFrac: 0.3 },
+  { id: "magDrum", label: "Snail drum", category: "magazine", socket: "magwell", url: null, preRotation: [0, 0, 0], lengthFrac: 0.26 },
+  {
+    id: "magSpare",
+    label: "Spare magazine",
+    category: "magazine",
+    socket: "magwell",
+    url: "/models/spare-mag.glb",
+    credit: { title: "Magazine", author: "jeremy [CC-BY] via poly.pizza", license: "CC-BY", source: "https://poly.pizza/m/OMzty7kxKo" },
+    preRotation: [0, Math.PI / 2, 0],
+    lengthFrac: 0.16,
+  },
+  // --- under-barrel ---
+  { id: "laser", label: "Laser module", category: "laser", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.1 },
+  { id: "flashlight", label: "Flashlight", category: "light", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.11 },
+  { id: "foregrip", label: "Stub foregrip", category: "grip", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.08 },
 ];
+
+/** One mounted or loose piece on the bench. */
+export interface PlacedPiece {
+  key: string;
+  pieceId: string;
+  /** Socket instance id (e.g. "muzzle", "railTop", "railTop@<key>") or null = loose. */
+  attachedTo: string | null;
+  /** Free position when loose (normalized gun space). */
+  pos: [number, number, number];
+  rot: [number, number, number];
+  scale: [number, number, number];
+}
+
+export const SLIDE_FINISHES = [
+  { id: "gunmetal", label: "Gunmetal", color: "#5d656f" },
+  { id: "graphite", label: "Graphite black", color: "#33373d" },
+  { id: "tan", label: "Wasteland tan", color: "#8a7a5c" },
+  { id: "olive", label: "Olive drab", color: "#5c6650" },
+] as const;
