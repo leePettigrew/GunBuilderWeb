@@ -302,3 +302,19 @@ describe("revolver platform", () => {
     expect(computeFirearm(build, rules).warnings.some((w) => w.includes("feed"))).toBe(true);
   });
 });
+
+describe("machine pistol platform", () => {
+  it("accepts select-fire + drum + foregrip, warns on scope and belt", () => {
+    const build = newFirearmBuild(rules, "machinePistol");
+    build.actionId = "semiFull";
+    build.magazineId = "drum";
+    build.attachmentIds = ["foregrip", "redDot"];
+    expect(computeFirearm(build, rules).warnings).toEqual([]);
+
+    build.attachmentIds = ["scope"];
+    expect(computeFirearm(build, rules).warnings.some((w) => w.includes("mount"))).toBe(true);
+    build.attachmentIds = [];
+    build.magazineId = "belt";
+    expect(computeFirearm(build, rules).warnings.some((w) => w.includes("feed"))).toBe(true);
+  });
+});

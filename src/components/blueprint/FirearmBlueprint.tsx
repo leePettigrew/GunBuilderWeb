@@ -515,6 +515,33 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
   },
 };
 
+// Machine pistol: the M1911 pattern with a stock socket and select-fire
+// group — same traced outline, same stretch, plus conversion details.
+{
+  const pistolSpec = FRAME_SPECS["pistol"];
+  if (pistolSpec !== undefined) {
+    FRAME_SPECS["machinePistol"] = {
+      ...pistolSpec,
+      stock: { x: 284, y: 204 }, // holster-stock lug at the grip heel
+      draw: (barrelPx, build) => (
+        <g>
+          {pistolSpec.draw(barrelPx, build)}
+          <g transform="translate(560,130) scale(1.4) translate(-560,-141)">
+            {/* select-fire lever + fire-mode index marks on the frame flat */}
+            <circle cx={395} cy={181} r={2.2} {...T} strokeWidth={0.8} />
+            <line x1={395} y1={181} x2={402} y2={174} {...S} strokeWidth={1.2} />
+            {[0, 4, 8].map((o) => (
+              <line key={o} x1={399 + o} y1={169} x2={400 + o} y2={172} {...T} strokeWidth={0.7} />
+            ))}
+            {/* stock lug cut on the grip heel */}
+            <rect x={366} y={186} width={4} height={9} rx={1} {...T} strokeWidth={0.8} />
+          </g>
+        </g>
+      ),
+    };
+  }
+}
+
 const FALLBACK_SPEC: FrameSpec = {
   rx1: 398,
   barrelY: 177,

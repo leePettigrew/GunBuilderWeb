@@ -110,3 +110,20 @@ whole economy from the Rules Lab.
   damage modifier and never added it. `BowMaterialDef.damageMod` is now a
   real flat bonus (e.g. carbon fiber +2, wood −2), applied alongside the
   arrow's modifier and traced on the stat card.
+
+## The pistol program (traced schematics + realism constraints)
+
+- Pistol-class platforms are now three frames: **Pistol** (M1911 pattern),
+  **Revolver** (Colt M1917 pattern) and **Machine Pistol** (select-fire
+  conversion of the M1911 pattern). The M1911 and M1917 profiles are traced
+  from public-domain US Army manuals (FM 23-35, 1940 and 1946 editions) and
+  drawn at ~2.8:1 / 2.6:1 scale with real grip rake, triggers, controls and
+  in-grip magazine X-rays.
+- Barrel length physically reshapes pistols: the slide stretches from
+  commander (~108mm) through government (127mm) to longslide (178mm+), and
+  revolver barrels run snub to hunting lengths.
+- **Part compatibility** is now data (`FrameDef.actionIds/magazineIds/
+  attachmentIds`, editable in the Rules Lab): pistols take red dots, lasers,
+  lights, suppressors, comps, brakes, extended mags and snail drums — and the
+  engine warns on physically absurd combos (belt-fed pistols, suppressed
+  revolvers, pistol bipods). The builder filters its pickers accordingly.

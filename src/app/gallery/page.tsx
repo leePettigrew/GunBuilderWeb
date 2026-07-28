@@ -43,6 +43,8 @@ export default function GalleryPage() {
       make("revolver", "M1917 Pattern", { cartridgeId: "45acp", actionId: "doubleAction", magazineId: "cylinder", barrelLengthMm: 140, stockId: "pistolGrip" }),
       make("revolver", "Snub Pattern", { cartridgeId: "357mag", actionId: "doubleAction", magazineId: "cylinder", barrelLengthMm: 64, attachmentIds: ["laser"], stockId: "pistolGrip" }),
       make("revolver", "Hunting Iron", { cartridgeId: "500linebaugh", actionId: "singleAction", magazineId: "cylinder", barrelLengthMm: 203, attachmentIds: ["scope"], stockId: "pistolGrip" }),
+      make("machinePistol", "Schnellfeuer Pattern", { cartridgeId: "9x19", actionId: "semiFull", magazineId: "extended", barrelLengthMm: 140, attachmentIds: ["redDot", "compensator"], stockId: "standard" }),
+      make("machinePistol", "Stockless Burst", { cartridgeId: "10mm", actionId: "semiBurst", magazineId: "drum", barrelLengthMm: 127, attachmentIds: ["foregrip", "laser"], stockId: "pistolGrip" }),
     ];
   }, [ruleset]);
 
