@@ -106,3 +106,32 @@ plain arrays in `Ruleset.catalog`, all editable in the Rules Lab.
 
 The share codec, exports, armory and Rules Lab need no changes — they operate
 on `AnyBuild` and `Ruleset` generically.
+
+## The 3D Workshop
+
+`/workshop` renders sourced GLB weapons with a Tarkov-style customization
+loop. Key modules: `src/lib/workshop/manifests.ts` (weapon + piece catalogs)
+and `src/components/workshop/WeaponViewer.tsx` (scene, sockets, drag/snap).
+
+### Onboarding a new weapon GLB
+
+1. Drop the file in `public/models/` (CC-BY / PD only; note the credit).
+2. Add a `WeaponModelDef`: `url`, `credit`, `preRotation` (rotate so the
+   muzzle faces +X — try `[0,0,0]`, then `[0,Math.PI,0]`; verify with a
+   screenshot), and `parts` regexes mapping mesh/ancestor node names to
+   `frame|slide|barrel|mag|trigger|misc`.
+3. Everything else is automatic: showcase props scattered around the gun
+   (spare mags, bullets) are removed by the frame-cluster filter, the model
+   is normalized to length 1 with muzzle at +X, and the anchor sockets
+   (muzzle / railTop / under / magwell) are MEASURED from the part bounding
+   boxes — no hand-placed coordinates.
+4. Verify interactions with `python scripts/cdp-workshop-test.py` (drives a
+   real pointer through spawn → drag → snap → detach against
+   `/workshop?wsdebug`, which exposes `window.__wsState` + `__wsScreens`).
+
+### Pieces
+
+A `PieceDef` is a GLB or a procedural build (lathe profiles, slotted rails)
+with a socket type; `provides` lets a mounted piece offer new sockets (the
+rail segment adds a raised `railTop`, so optics chain onto it). Loadouts
+persist to `localStorage` under `ashen-armoury:v1:workshop`.

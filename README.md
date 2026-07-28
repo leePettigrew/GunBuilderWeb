@@ -184,3 +184,15 @@ attachments it physically accepts (editable in the Rules Lab). The builder
 filters its pickers to legal parts and the engine warns loudly if a saved or
 imported build breaks the laws of gunsmithing — no belt-fed pistols in this
 wasteland.
+
+## The 3D Workshop (experimental)
+
+`/workshop` is a Tarkov-style bench: real sourced models (CC/PD, credited
+in-app) rendered in a unified armory-clay finish, with glowing anchor
+points measured from each model's geometry. Spawn pieces from the inventory
+— suppressors, brakes, a chaining rail, optics, magazines, grips, lasers,
+lights, a bayonet — drag them onto anchors to mount, drag them off to
+strip, rotate/stretch them with gizmos, blow the weapon apart with the
+exploded slider or lay every part flat on the bench. Loadouts save locally,
+and a CDP-driven pointer test (`scripts/cdp-workshop-test.py`) regression-
+tests the drag-snap loop headlessly.

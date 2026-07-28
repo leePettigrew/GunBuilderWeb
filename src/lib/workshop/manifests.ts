@@ -86,7 +86,7 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
     label: "Marksman Rifle (PD)",
     url: "/models/sniper-rifle.glb",
     credit: { title: "Sniper Rifle", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/ASOMZIErq3" },
-    preRotation: [0, Math.PI, 0],
+    preRotation: [0, 0, 0],
     parts: [
       [/bolt|slide/i, "slide"],
       [/mag/i, "mag"],
