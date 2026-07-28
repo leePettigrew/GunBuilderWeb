@@ -18,8 +18,9 @@ export function newFirearmBuild(rules: Ruleset, frameId?: string): FirearmBuild 
   const c = rules.catalog;
   const frame = c.frames.find((f) => f.id === frameId) ?? c.frames.find((f) => f.id === "assaultRifle") ?? c.frames[0];
   const isShotgun = frame !== undefined && frame.ammoClasses.includes("shell");
-  // Prefer the iconic defaults (7.62×39 / 9×19) over raw catalog order.
-  const preferred = frame?.ammoClasses.includes("rifle") ? "762x39" : "9x19";
+  // Prefer the iconic defaults (7.62×39 / 9×19 / .45 ACP) over catalog order.
+  const preferred =
+    frame?.id === "revolver" ? "45acp" : frame?.ammoClasses.includes("rifle") ? "762x39" : "9x19";
   const cartridge = frame
     ? (c.cartridges.find((a) => a.id === preferred && frame.ammoClasses.includes(a.class)) ??
       c.cartridges.find((a) => frame.ammoClasses.includes(a.class)))

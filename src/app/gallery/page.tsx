@@ -40,6 +40,9 @@ export default function GalleryPage() {
       make("pistol", "Holdout Suppressed", { cartridgeId: "22lr", actionId: "semi", barrelLengthMm: 115, attachmentIds: ["suppressor", "flashlight"], stockId: "pistolGrip" }),
       make("pistol", "Longslide Redline", { cartridgeId: "10mm", actionId: "semi", barrelLengthMm: 178, magazineId: "extended", attachmentIds: ["redDot", "compensator"], stockId: "pistolGrip" }),
       make("pistol", "Snail Special", { cartridgeId: "45acp", actionId: "doubleAction", barrelLengthMm: 127, magazineId: "drum", attachmentIds: ["muzzleBrake", "laser"], stockId: "pistolGrip" }),
+      make("revolver", "M1917 Pattern", { cartridgeId: "45acp", actionId: "doubleAction", magazineId: "cylinder", barrelLengthMm: 140, stockId: "pistolGrip" }),
+      make("revolver", "Snub Pattern", { cartridgeId: "357mag", actionId: "doubleAction", magazineId: "cylinder", barrelLengthMm: 64, attachmentIds: ["laser"], stockId: "pistolGrip" }),
+      make("revolver", "Hunting Iron", { cartridgeId: "500linebaugh", actionId: "singleAction", magazineId: "cylinder", barrelLengthMm: 203, attachmentIds: ["scope"], stockId: "pistolGrip" }),
     ];
   }, [ruleset]);
 

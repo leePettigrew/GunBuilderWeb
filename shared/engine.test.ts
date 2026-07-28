@@ -286,3 +286,19 @@ describe("realism compatibility", () => {
     expect(computeFirearm(build, custom).warnings).toEqual([]);
   });
 });
+
+describe("revolver platform", () => {
+  it("runs cylinder + double action clean, rejects suppressor and belt", () => {
+    const build = newFirearmBuild(rules, "revolver");
+    expect(build.actionId).toBe("singleAction"); // clamped from the semi default
+    expect(build.magazineId).toBe("cylinder");
+    build.actionId = "doubleAction";
+    expect(computeFirearm(build, rules).warnings).toEqual([]);
+
+    build.attachmentIds = ["suppressor"];
+    expect(computeFirearm(build, rules).warnings.some((w) => w.includes("mount"))).toBe(true);
+    build.attachmentIds = [];
+    build.magazineId = "belt";
+    expect(computeFirearm(build, rules).warnings.some((w) => w.includes("feed"))).toBe(true);
+  });
+});

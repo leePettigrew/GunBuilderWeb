@@ -24,6 +24,7 @@ import {
   strokeThin,
 } from "./common";
 import { M1911_OUTLINE } from "./m1911-outline";
+import { M1917_OUTLINE } from "./m1917-outline";
 
 // ---------------------------------------------------------------------------
 // Frame socket tables
@@ -83,6 +84,18 @@ function m1911Path(deltaMm: number): string {
   return (
     M1911_PTS.map(
       (pt, i) => `${i === 0 ? "M" : "L"}${(pt.x > 480 ? pt.x + deltaMm : pt.x).toFixed(1)},${pt.y.toFixed(1)}`,
+    ).join("") + "Z"
+  );
+}
+
+const M1917_PTS = (M1917_OUTLINE.match(/[ML][\d.]+,[\d.]+/g) ?? []).map((t) => {
+  const [x = 0, y = 0] = t.slice(1).split(",").map(Number);
+  return { x, y };
+});
+function m1917Path(deltaMm: number): string {
+  return (
+    M1917_PTS.map(
+      (pt, i) => `${i === 0 ? "M" : "L"}${(pt.x > 500 ? pt.x + deltaMm : pt.x).toFixed(1)},${pt.y.toFixed(1)}`,
     ).join("") + "Z"
   );
 }
@@ -167,10 +180,62 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
           </g>
         )}
         {/* scale note */}
-        <text x={344} y={296} fontFamily="var(--font-mono)" fontSize={8} letterSpacing="0.15em" fill="rgb(var(--c-bone-faint))">
+        <text x={298} y={298} fontFamily="var(--font-mono)" fontSize={8} letterSpacing="0.15em" fill="rgb(var(--c-bone-faint))">
           SCALE 2.8:1
         </text>
       </g>
+      );
+    },
+  },
+
+  // ----- Colt M1917 revolver — outline traced from FM 23-35 (1946) ---------
+  // Baked at 1 px = 1 mm, displayed ×1.3. map(x) = 560 − (560−x)×1.3,
+  // map(y) = 112 + (y−132)×1.3. Barrel stretch cut forward of the ejector rod.
+  revolver: {
+    rx1: 560,
+    barrelY: 130,
+    barrelHalf: 9,
+    stock: null,
+    mag: { x: 352, y: 252, angle: 0 },
+    rail: { x0: 318, x1: 394, y: 120 },
+    under: { x: 469, y: 164 },
+    side: { x: 446, y: 175 },
+    belt: { x: 380, y: 250 },
+    pxPerMm: 1.3,
+    barrelFlush: true,
+    muzzleShift: (b) => Math.max(-60, Math.min((b / 1.3 - 140) * 1.3, 78)),
+    hiddenMag: true, // the cylinder is integral and drawn below
+    draw: (barrelPx) => {
+      const deltaMm = Math.max(-46, Math.min(barrelPx / 1.3 - 140, 60));
+      return (
+        <g transform="translate(560,112) scale(1.3) translate(-560,-132)">
+          {/* true silhouette, barrel stretched to length */}
+          <path d={m1917Path(deltaMm)} {...S} strokeWidth={1.5} />
+          {/* cylinder with flutes, arbor line and rear latch */}
+          <rect x={378} y={150} width={42} height={46} rx={8} {...T} strokeWidth={1.1} />
+          <line x1={383} y1={163} x2={415} y2={163} {...T} strokeWidth={0.8} />
+          <line x1={383} y1={183} x2={415} y2={183} {...T} strokeWidth={0.8} />
+          <line x1={378} y1={173} x2={420} y2={173} {...T} strokeWidth={0.8} strokeDasharray="4 3" opacity={0.6} />
+          <rect x={422} y={156} width={5} height={10} rx={2} {...T} strokeWidth={0.8} />
+          {/* barrel / cylinder gap witness */}
+          <line x1={420} y1={150} x2={420} y2={196} {...T} strokeWidth={1} />
+          {/* inner guard edge + curved revolver trigger */}
+          <path d="M414,208 C410,224 396,230 380,226" {...T} strokeWidth={0.9} />
+          <path d="M402,210 q-2,9 -9,11" {...S} strokeWidth={1.2} />
+          {/* hammer spur checkering */}
+          {[0, 3].map((o) => (
+            <line key={o} x1={344 + o} y1={139 - o * 0.4} x2={348 + o} y2={144 - o * 0.4} {...T} strokeWidth={0.7} />
+          ))}
+          {/* top strap sight groove */}
+          <line x1={356} y1={139} x2={418} y2={139} {...T} strokeWidth={0.8} />
+          {/* long wooden stocks: panel + screw */}
+          <path d="M346,210 L318,204 L300,262 L328,268 Z" {...T} strokeWidth={0.8} fill={HATCH} opacity={0.85} />
+          <circle cx={322} cy={236} r={1.8} {...T} strokeWidth={0.8} />
+          {/* scale note */}
+          <text x={288} y={302} fontFamily="var(--font-mono)" fontSize={8} letterSpacing="0.15em" fill="rgb(var(--c-bone-faint))">
+            SCALE 2.6:1
+          </text>
+        </g>
       );
     },
   },
@@ -704,7 +769,7 @@ function barrelAssembly(
   }
   // front sight post unless a suppressor swallows the muzzle or the frame
   // draws its own front furniture (AK tower, SVD hood, TOZ bead rib, slide)
-  const ownFrontSight = ["assaultRifle", "dmr", "shotgun", "pistol"].includes(build.frameId);
+  const ownFrontSight = ["assaultRifle", "dmr", "shotgun", "pistol", "revolver"].includes(build.frameId);
   if (!has("suppressor") && !ownFrontSight && boreVisible && x1 - x0 > 30) {
     parts.push(
       <g key="fsight">
@@ -906,7 +971,7 @@ export function FirearmBlueprint({
       {barrelNode}
       {attachmentsFor(build, spec, barrelPx)}
       {/* rear sight tick (frames with their own furniture already have one) */}
-      {!["assaultRifle", "battleRifle", "lmg", "carbine", "pistol"].includes(build.frameId) && (
+      {!["assaultRifle", "battleRifle", "lmg", "carbine", "pistol", "revolver"].includes(build.frameId) && (
         <rect x={spec.rail.x0 + 4} y={spec.rail.y - 5} width={6} height={5} {...T} />
       )}
 
