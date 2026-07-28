@@ -12,7 +12,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, OrbitControls, TransformControls, useGLTF } from "@react-three/drei";
+import { ContactShadows, Html, OrbitControls, TransformControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -239,6 +239,11 @@ function ProceduralPiece({ def, selected }: { def: PieceDef; selected: boolean }
           [0, -0.12], [0.03, -0.118], [0.042, -0.105], [0.042, -0.02], [0.038, -0.015], [0.042, -0.01],
           [0.042, 0.07], [0.038, 0.075], [0.042, 0.08], [0.042, 0.1], [0.03, 0.115], [0, 0.118],
         ]);
+      case "portedBrake":
+        return lathe([
+          [0, -0.055], [0.026, -0.053], [0.03, -0.045], [0.03, -0.03], [0.034, -0.025], [0.034, -0.01],
+          [0.03, -0.005], [0.03, 0.01], [0.034, 0.015], [0.034, 0.03], [0.03, 0.035], [0.026, 0.05], [0, 0.053],
+        ]);
       default:
         return null;
     }
@@ -310,6 +315,36 @@ function ProceduralPiece({ def, selected }: { def: PieceDef; selected: boolean }
           </mesh>
           <mesh material={CLAY.trigger} position={[0, -0.16, 0.028]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.02, 0.02, 0.01, 16]} />
+          </mesh>
+        </group>
+      );
+    case "verticalGrip":
+      return (
+        <group>
+          <mesh material={mat} position={[0, -0.008, 0]}>
+            <boxGeometry args={[0.09, 0.016, 0.048]} />
+          </mesh>
+          <mesh material={mat} position={[0.004, -0.062, 0]} rotation={[0, 0, 0.14]}>
+            <cylinderGeometry args={[0.021, 0.027, 0.095, 14]} />
+          </mesh>
+          {[-0.082, -0.062, -0.042].map((y) => (
+            <mesh key={y} material={CLAY.mag} position={[0.004 + (y + 0.062) * 0.14, y, 0]} rotation={[0, 0, 0.14]}>
+              <cylinderGeometry args={[0.0275, 0.0275, 0.006, 14]} />
+            </mesh>
+          ))}
+        </group>
+      );
+    case "cantedIrons":
+      return (
+        <group rotation={[-0.6, 0, 0]}>
+          <mesh material={mat} position={[-0.03, 0.014, 0]}>
+            <boxGeometry args={[0.018, 0.028, 0.03]} />
+          </mesh>
+          <mesh material={mat} position={[0.032, 0.011, 0]}>
+            <boxGeometry args={[0.012, 0.022, 0.006]} />
+          </mesh>
+          <mesh material={mat} position={[0, 0.002, 0]}>
+            <boxGeometry args={[0.095, 0.008, 0.02]} />
           </mesh>
         </group>
       );
@@ -391,6 +426,26 @@ function AnchorMarker({ socket, active, occupied }: { socket: SocketInstance; ac
   const color = occupied ? "#5c6650" : active ? "#ff6a2b" : "#7a4a30";
   return (
     <group ref={ref} position={socket.pos}>
+      {active && (
+        <Html center style={{ pointerEvents: "none" }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.15em",
+              color: "#ff6a2b",
+              background: "rgba(13,17,22,0.85)",
+              border: "1px solid rgba(255,106,43,0.5)",
+              borderRadius: 3,
+              padding: "1px 5px",
+              transform: "translateY(-22px)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {socket.type.toUpperCase()}
+          </div>
+        </Html>
+      )}
       <mesh rotation={socket.type === "muzzle" ? [0, Math.PI / 2, 0] : [Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.022, 0.003, 8, 24]} />
         <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.45} />
@@ -435,6 +490,58 @@ const BENCH_SLOTS: Record<PartId, [number, number, number]> = {
 
 function pieceDef(id: string): PieceDef | undefined {
   return PIECES.find((p) => p.id === id);
+}
+
+/** Animated piece holder: lerps to its target unless being dragged. */
+function PieceNode({
+  target,
+  immediate,
+  rot,
+  scale,
+  refCb,
+  onPointerDown,
+  onPointerOver,
+  onPointerOut,
+  children,
+}: {
+  target: [number, number, number];
+  immediate: boolean;
+  rot: [number, number, number];
+  scale: [number, number, number];
+  refCb: (g: THREE.Group | null) => void;
+  onPointerDown: (e: { stopPropagation: () => void; point: THREE.Vector3 }) => void;
+  onPointerOver?: (e: { stopPropagation: () => void }) => void;
+  onPointerOut?: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<THREE.Group | null>(null);
+  const initialized = useRef(false);
+  useFrame(() => {
+    const g = ref.current;
+    if (!g) return;
+    const t = new THREE.Vector3(...target);
+    if (!initialized.current || immediate) {
+      g.position.copy(t);
+      initialized.current = true;
+    } else {
+      g.position.lerp(t, 0.22);
+    }
+  });
+  return (
+    <group
+      ref={(g: THREE.Group | null) => {
+        ref.current = g;
+        refCb(g);
+      }}
+      rotation={rot}
+      scale={scale}
+      onPointerDown={onPointerDown}
+      onPointerOver={onPointerOver}
+      onPointerOut={onPointerOut}
+    >
+      {children}
+    </group>
+  );
 }
 
 function EnvironmentSetup() {
@@ -630,19 +737,28 @@ function Scene({ state, cb }: { state: WorkshopState; cb: ViewerCallbacks }) {
           }
           const isSelected = state.selectedKey === placed.key;
           return (
-            <group
+            <PieceNode
               key={placed.key}
-              position={pos}
-              rotation={placed.rot}
+              target={pos}
+              immediate={draggingKey === placed.key}
+              rot={placed.rot}
               scale={placed.scale}
-              ref={(g: THREE.Group | null) => {
+              refCb={(g) => {
                 if (g) pieceRefs.current.set(placed.key, g);
                 else pieceRefs.current.delete(placed.key);
               }}
-              onPointerDown={(e: { stopPropagation: () => void; point: THREE.Vector3 }) => {
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                gl.domElement.style.cursor = "grab";
+              }}
+              onPointerOut={() => {
+                gl.domElement.style.cursor = "auto";
+              }}
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 cb.selectPiece(placed.key);
                 if (state.gizmo !== "off" || state.view === "bench") return;
+                gl.domElement.style.cursor = "grabbing";
                 dragPlane.current.setFromNormalAndCoplanarPoint(
                   camera.getWorldDirection(new THREE.Vector3()).negate(),
                   e.point,
@@ -651,7 +767,7 @@ function Scene({ state, cb }: { state: WorkshopState; cb: ViewerCallbacks }) {
               }}
             >
               {d.url === null ? <ProceduralPiece def={d} selected={isSelected} /> : <GlbPiece def={d} selected={isSelected} />}
-            </group>
+            </PieceNode>
           );
         })}
       </group>

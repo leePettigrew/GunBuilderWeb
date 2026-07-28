@@ -81,6 +81,20 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
       [/base|frame/i, "frame"],
     ],
   },
+  {
+    id: "sniperRifle",
+    label: "Marksman Rifle (PD)",
+    url: "/models/sniper-rifle.glb",
+    credit: { title: "Sniper Rifle", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/ASOMZIErq3" },
+    preRotation: [0, Math.PI, 0],
+    parts: [
+      [/bolt|slide/i, "slide"],
+      [/mag/i, "mag"],
+      [/barrel/i, "barrel"],
+      [/trigger/i, "trigger"],
+      [/scope|sight/i, "misc"],
+    ],
+  },
 ];
 
 export const PIECES: PieceDef[] = [
@@ -145,6 +159,19 @@ export const PIECES: PieceDef[] = [
     lengthFrac: 0.16,
   },
   // --- under-barrel ---
+  {
+    id: "bayonetKnife",
+    label: "Bayonet (knife)",
+    category: "muzzle",
+    socket: "muzzle",
+    url: "/models/bayonet-knife.glb",
+    credit: { title: "Knife", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/0g8M6yYtE4" },
+    preRotation: [0, Math.PI / 2, 0],
+    lengthFrac: 0.22,
+  },
+  { id: "portedBrake", label: "Ported brake", category: "muzzle", socket: "muzzle", url: null, preRotation: [0, 0, 0], lengthFrac: 0.11 },
+  { id: "verticalGrip", label: "Vertical grip", category: "grip", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.09 },
+  { id: "cantedIrons", label: "Canted iron sights", category: "optic", socket: "railTop", url: null, preRotation: [0, 0, 0], lengthFrac: 0.1 },
   { id: "laser", label: "Laser module", category: "laser", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.1 },
   { id: "flashlight", label: "Flashlight", category: "light", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.11 },
   { id: "foregrip", label: "Stub foregrip", category: "grip", socket: "under", url: null, preRotation: [0, 0, 0], lengthFrac: 0.08 },
