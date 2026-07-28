@@ -67,6 +67,8 @@ interface FrameSpec {
   muzzleShift?: (barrelPx: number) => number;
   /** Box mags live inside the grip (pistols): draw a baseplate instead. */
   hiddenMag?: boolean;
+  /** Stock rotation in degrees (holster stocks droop with the grip rake). */
+  stockAngle?: number;
   draw: (barrelPx: number, build: FirearmBuild) => ReactNode;
 }
 
@@ -110,7 +112,7 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
     barrelHalf: 7.5,
     stock: null,
     mag: { x: 314, y: 316, angle: -18 },
-    rail: { x0: 291, x1: 543, y: 131 },
+    rail: { x0: 291, x1: 543, y: 137 }, // the slide flat (pre-y 146 × 1.4 map)
     under: { x: 498, y: 193 },
     side: { x: 456, y: 179 },
     belt: { x: 420, y: 235 },
@@ -164,10 +166,10 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
         {/* extended magazine: body protrudes below the grip on the rake */}
         {build.magazineId === "extended" && (
           <g>
-            <path d="M393,271 L409,271 L402,296 q-8,3 -15,-1 Z" {...S} strokeWidth={1.1} fill={HATCH} />
-            <path d="M386,297 L403,297 L402,301 L385,301 Z" {...S} strokeWidth={1.1} />
-            {[279, 288].map((y) => (
-              <circle key={y} cx={404 - (y - 271) * 0.32} cy={y} r={1.3} {...T} strokeWidth={0.7} />
+            <path d="M393,273 L410,273 L403,296 q-8,3 -15,-1 Z" {...S} strokeWidth={1.1} fill={HATCH} />
+            <path d="M387,297 L404,297 L403,301 L386,301 Z" {...S} strokeWidth={1.1} />
+            {[280, 289].map((y) => (
+              <circle key={y} cx={405 - (y - 273) * 0.32} cy={y} r={1.3} {...T} strokeWidth={0.7} />
             ))}
           </g>
         )}
@@ -523,6 +525,7 @@ const FRAME_SPECS: Record<string, FrameSpec> = {
     FRAME_SPECS["machinePistol"] = {
       ...pistolSpec,
       stock: { x: 284, y: 204 }, // holster-stock lug at the grip heel
+      stockAngle: 14,
       draw: (barrelPx, build) => (
         <g>
           {pistolSpec.draw(barrelPx, build)}
@@ -987,7 +990,9 @@ export function FirearmBlueprint({
     <BlueprintFrame build={build} rules={rules} className={className}>
       <HatchDefs />
       {stockNode !== null && spec.stock !== null && (
-        <g transform={`translate(${spec.stock.x},${spec.stock.y})`}>{stockNode}</g>
+        <g transform={`translate(${spec.stock.x},${spec.stock.y}) rotate(${spec.stockAngle ?? 0})`}>
+          {stockNode}
+        </g>
       )}
       {/* hiddenMag frames (pistols) draw their own feeds at native scale. */}
       {spec.hiddenMag !== true && magNode !== null && (

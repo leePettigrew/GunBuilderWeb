@@ -167,3 +167,20 @@ existence of that app.
 
 Personal project — no license granted for redistribution. Ashen Skies and its
 weapon mechanics belong to their author.
+
+## The pistol bench
+
+Pistol-class weapons get the deepest treatment in the fabricator. Three
+platforms share one interchangeable parts pool:
+
+| Platform | Source profile | What swaps |
+|---|---|---|
+| **Pistol** | M1911 traced from FM 23-35 (1940, public domain) | Barrel length reshapes the slide (commander → government → longslide), red dot, laser, light, suppressor, comp, brake, extended mag, snail drum |
+| **Revolver** | Colt M1917 traced from FM 23-35 (1946) | Snub-to-hunting barrels, top-strap optics, laser, light, comp, brake — never a suppressor (the cylinder gap vents gas) |
+| **Machine Pistol** | Select-fire M1911 conversion | Everything the pistol takes, plus a holster-stock socket, foregrip, and burst/full trigger groups |
+
+Compatibility is data, not code: each frame lists the actions, feeds and
+attachments it physically accepts (editable in the Rules Lab). The builder
+filters its pickers to legal parts and the engine warns loudly if a saved or
+imported build breaks the laws of gunsmithing — no belt-fed pistols in this
+wasteland.
