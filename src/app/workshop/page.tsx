@@ -7,7 +7,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PIECES,
   SLIDE_FINISHES,
@@ -57,6 +57,54 @@ export default function WorkshopPage() {
     gizmo: "off",
   });
   const [hoveredPart, setHoveredPart] = useState<PartId | null>(null);
+  const [loadoutSaved, setLoadoutSaved] = useState(false);
+
+  // loadout persistence
+  const STORAGE_KEY = "ashen-armoury:v1:workshop";
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw !== null) {
+        const saved = JSON.parse(raw) as { modelId?: string; finish?: string; placed?: PlacedPiece[] };
+        if (Array.isArray(saved.placed)) {
+          setState((s) => ({
+            ...s,
+            modelId: typeof saved.modelId === "string" ? saved.modelId : s.modelId,
+            finish: typeof saved.finish === "string" ? saved.finish : s.finish,
+            placed: (saved.placed ?? []).filter((pp) => PIECES.some((d) => d.id === pp.pieceId)),
+          }));
+          const maxKey = Math.max(0, ...(saved.placed ?? []).map((pp) => Number(/^p(\d+)$/.exec(pp.key)?.[1] ?? 0)));
+          keyCounter.current = maxKey;
+        }
+      }
+    } catch {
+      // corrupt save: start clean
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const saveLoadout = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ modelId: state.modelId, finish: state.finish, placed: state.placed }));
+      setLoadoutSaved(true);
+      window.setTimeout(() => setLoadoutSaved(false), 1600);
+    } catch {
+      // quota: ignore
+    }
+  };
+  const resetBench = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    keyCounter.current = 0;
+    setState((s) => ({ ...s, placed: [], selectedKey: null, explode: 0, view: "assembled" }));
+  };
+
+  // test hook: headless interaction tests read placement state through this
+  if (typeof window !== "undefined") {
+    (window as unknown as { __wsState?: unknown }).__wsState = {
+      placed: state.placed,
+      view: state.view,
+      selected: state.selectedKey,
+    };
+  }
 
   const patch = (p: Partial<WorkshopState>) => setState((s) => ({ ...s, ...p }));
 
@@ -176,6 +224,13 @@ export default function WorkshopPage() {
                 Scrap selected
               </Button>
             )}
+            <span className="grow" />
+            <Button variant="secondary" size="sm" onClick={saveLoadout}>
+              {loadoutSaved ? "Saved" : "Save loadout"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={resetBench}>
+              Reset bench
+            </Button>
           </div>
         </div>
 

@@ -563,6 +563,26 @@ function Scene({ state, cb }: { state: WorkshopState; cb: ViewerCallbacks }) {
     if (controlsRef.current) controlsRef.current.enabled = draggingKey === null;
   }, [draggingKey]);
 
+  // test hook: project pieces + sockets to canvas pixels for CDP tests
+  const { size } = useThree();
+  useFrame(() => {
+    if (typeof window === "undefined" || !window.location.search.includes("wsdebug")) return;
+    const v = new THREE.Vector3();
+    const out: Record<string, [number, number]> = {};
+    for (const [key, g] of pieceRefs.current) {
+      g.getWorldPosition(v);
+      v.project(camera);
+      out[`piece:${key}`] = [((v.x + 1) / 2) * size.width, ((1 - v.y) / 2) * size.height];
+    }
+    for (const sck of sockets) {
+      v.copy(sck.pos);
+      if (spinGroup.current) spinGroup.current.localToWorld(v);
+      v.project(camera);
+      out[`socket:${sck.id}`] = [((v.x + 1) / 2) * size.width, ((1 - v.y) / 2) * size.height];
+    }
+    (window as unknown as { __wsScreens?: unknown }).__wsScreens = out;
+  });
+
   const selectedPlaced = state.placed.find((p) => p.key === state.selectedKey) ?? null;
   const selectedObj = state.selectedKey !== null ? pieceRefs.current.get(state.selectedKey) : undefined;
 
