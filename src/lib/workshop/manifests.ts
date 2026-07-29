@@ -89,7 +89,7 @@ export const WEAPON_MODELS: WeaponModelDef[] = [
     url: "/models/sniper-rifle.glb",
     credit: { title: "Sniper Rifle", author: "Quaternius via poly.pizza", license: "Public Domain", source: "https://poly.pizza/m/ASOMZIErq3" },
     preRotation: [0, 0, 0],
-    socketOverrides: { railTop: [0.16, 0.09, 0] }, // ahead of the integral scope
+    socketOverrides: { railTop: [0.16, 0.078, 0] }, // ahead of the integral scope
     parts: [
       [/bolt|slide/i, "slide"],
       [/mag/i, "mag"],
