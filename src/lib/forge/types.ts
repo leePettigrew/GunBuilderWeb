@@ -7,11 +7,9 @@
  * dragged, rotated, stretched or flipped into place.
  */
 
-import { M1911_PARTS, type ForgePart } from "./m1911-parts";
+import { DEFAULT_PARAMS, PART_ORDER, generateM1911, type GeneratedPart, type M1911Params } from "./m1911-model";
 
-export { M1911_PARTS };
-
-export type { ForgePart };
+export type { GeneratedPart, M1911Params };
 
 export interface Placement {
   key: string;
@@ -31,6 +29,7 @@ export interface Placement {
 }
 
 export interface ForgeState {
+  params: M1911Params;
   placements: Placement[];
   selectedKey: string | null;
   explode: number;
@@ -40,7 +39,8 @@ export interface ForgeState {
   ink: string; // stroke token
 }
 
-export const PART_BY_ID = new Map<string, ForgePart>(M1911_PARTS.map((p) => [p.id, p]));
+/** Parts for the default build — used for slot names and fresh benches. */
+export const BASE_PARTS: GeneratedPart[] = generateM1911(DEFAULT_PARAMS);
 
 export const INK_OPTIONS = [
   { id: "blueprint", label: "Blueprint", css: "rgb(var(--c-blueprint))" },
@@ -51,7 +51,7 @@ export const INK_OPTIONS = [
 
 /** A fresh, fully assembled pistol. */
 export function newBuild(): Placement[] {
-  return M1911_PARTS.map((p) => ({
+  return BASE_PARTS.map((p) => ({
     key: `k-${p.id}`,
     partId: p.id,
     slot: p.slot,
@@ -69,6 +69,7 @@ export function newBuild(): Placement[] {
 
 export function newForgeState(): ForgeState {
   return {
+    params: { ...DEFAULT_PARAMS },
     placements: newBuild(),
     selectedKey: null,
     explode: 0,
@@ -81,27 +82,24 @@ export function newForgeState(): ForgeState {
 
 /** Direction each part flies when the assembly is exploded. */
 export const EXPLODE_DIR: Record<string, [number, number]> = {
-  slide: [6, -34],
-  barrel: [26, -16],
-  hammer: [-26, -18],
-  gripSafety: [-30, -2],
-  thumbSafety: [-16, -24],
-  mainspring: [-26, 16],
-  gripPanel: [10, 34],
-  magazine: [-2, 52],
-  trigger: [4, -12],
-  triggerGuard: [16, 22],
+  slide: [4, -46],
+  barrel: [30, -24],
+  hammer: [-34, -20],
+  safeties: [-30, -6],
+  gripPanel: [26, 30],
+  magazine: [-6, 56],
+  trigger: [2, -16],
   frame: [0, 0],
 };
 
 /** Centre of a part's drawn bbox — the pivot for rotation and stretching. */
-export function partPivot(part: ForgePart): [number, number] {
+export function partPivot(part: GeneratedPart): [number, number] {
   const [x, y, w, h] = part.bbox;
   return [x + w / 2, y + h / 2];
 }
 
 /** Full transform for a placement, including the exploded offset. */
-export function placementTransform(p: Placement, part: ForgePart, explode: number): string {
+export function placementTransform(p: Placement, part: GeneratedPart, explode: number): string {
   const [cx, cy] = partPivot(part);
   const dir = EXPLODE_DIR[part.id] ?? [0, 0];
   const tx = p.x + dir[0] * explode;
@@ -120,7 +118,10 @@ export function placementTransform(p: Placement, part: ForgePart, explode: numbe
 export const FORGE_STORAGE_KEY = "ashen-armoury:v1:forge";
 
 export interface ForgeExport {
-  schema: "ashen-skies/forge@1";
+  schema: "ashen-skies/forge@2";
   exportedAt: string;
+  params: M1911Params;
   placements: Placement[];
 }
+
+export { PART_ORDER, generateM1911, DEFAULT_PARAMS };
