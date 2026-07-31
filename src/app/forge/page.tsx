@@ -17,6 +17,7 @@ import {
   INK_OPTIONS,
   generateM1911,
   newForgeState,
+  reconcilePlacements,
   type ForgeExport,
   type ForgeState,
   type M1911Params,
@@ -31,7 +32,7 @@ import { NumberField, SelectField, Toggle } from "@/components/ui/Field";
 import { downloadJson } from "@/lib/download";
 import { cn } from "@/lib/cn";
 
-const GROUPS = ["Slide", "Frame", "Grip", "Controls"] as const;
+const GROUPS = ["Slide", "Frame", "Grip", "Controls", "Attachments"] as const;
 
 export default function ForgePage() {
   const [state, setState] = useState<ForgeState>(() => newForgeState());
@@ -42,6 +43,16 @@ export default function ForgePage() {
 
   const parts = useMemo(() => generateM1911(state.params), [state.params]);
   const byId = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
+
+  // Fitting or pulling an attachment changes which parts exist, so the bench
+  // has to follow. reconcilePlacements keeps the user's transforms for parts
+  // that survive and returns the same array when nothing moved.
+  useEffect(() => {
+    setState((s) => {
+      const next = reconcilePlacements(s.placements, parts);
+      return next === s.placements ? s : { ...s, placements: next };
+    });
+  }, [parts]);
 
   useEffect(() => {
     try {

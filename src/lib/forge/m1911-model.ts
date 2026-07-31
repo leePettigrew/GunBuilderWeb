@@ -19,6 +19,9 @@ export type SightStyle = "gi" | "combat" | "target";
 export type TriggerStyle = "solid" | "skeleton" | "long";
 export type GripTexture = "checkered" | "smooth" | "stippled";
 export type MagLength = "standard" | "extended" | "compact";
+export type MuzzleDevice = "none" | "compensator" | "suppressor";
+export type OpticFit = "none" | "reflex";
+export type LightFit = "none" | "weapon";
 
 export interface M1911Params {
   slideProfile: SlideProfile;
@@ -38,6 +41,9 @@ export interface M1911Params {
   magazine: MagLength;
   dustCover: number;
   lightRail: boolean;
+  muzzleDevice: MuzzleDevice;
+  optic: OpticFit;
+  light: LightFit;
 }
 
 /** A profile is a barrel-length preset; the slide follows the barrel. */
@@ -65,12 +71,15 @@ export const DEFAULT_PARAMS: M1911Params = {
   magazine: "standard",
   dustCover: 186,
   lightRail: false,
+  muzzleDevice: "none",
+  optic: "none",
+  light: "none",
 };
 
 export interface ParamSpec {
   key: keyof M1911Params;
   label: string;
-  group: "Slide" | "Frame" | "Grip" | "Controls";
+  group: "Slide" | "Frame" | "Grip" | "Controls" | "Attachments";
   kind: "number" | "select" | "toggle";
   min?: number;
   max?: number;
@@ -146,6 +155,28 @@ export const PARAM_SPECS: ParamSpec[] = [
       { value: "long", label: "Long match" },
     ],
   },
+  {
+    key: "muzzleDevice", label: "Muzzle", group: "Attachments", kind: "select",
+    options: [
+      { value: "none", label: "Bare crown" },
+      { value: "compensator", label: "Compensator" },
+      { value: "suppressor", label: "Suppressor" },
+    ],
+  },
+  {
+    key: "optic", label: "Optic", group: "Attachments", kind: "select",
+    options: [
+      { value: "none", label: "Irons only" },
+      { value: "reflex", label: "Reflex sight" },
+    ],
+  },
+  {
+    key: "light", label: "Rail device", group: "Attachments", kind: "select",
+    options: [
+      { value: "none", label: "None" },
+      { value: "weapon", label: "Weapon light" },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -188,6 +219,54 @@ function box(x: number, y: number, w: number, h: number, rad = 0): string {
 
 function circle(cx: number, cy: number, rad: number): string {
   return path().move([cx - rad, cy]).arc([cx + rad, cy], rad, 1).arc([cx - rad, cy], rad, 1).close().out;
+}
+
+/** A corner: position plus the fillet radius to break it with. */
+type Vert = [number, number, number];
+
+/**
+ * Closed outline from corners with true tangent fillets — every corner is a
+ * real arc of the stated radius and every run between them is straight. The
+ * sweep follows the turn direction, so this draws concave corners (a ramp
+ * meeting a deck) as correctly as convex ones.
+ */
+function roundPoly(v: Vert[]): string {
+  const n = v.length;
+  const unit = (a: Pt, b: Pt): Pt => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const m = Math.hypot(dx, dy) || 1;
+    return [dx / m, dy / m];
+  };
+  const seg = v.map((cur, i) => {
+    const prev = v[(i - 1 + n) % n] as Vert;
+    const next = v[(i + 1) % n] as Vert;
+    const d1 = unit([prev[0], prev[1]], [cur[0], cur[1]]);
+    const d2 = unit([cur[0], cur[1]], [next[0], next[1]]);
+    const dot = Math.max(-1, Math.min(1, d1[0] * d2[0] + d1[1] * d2[1]));
+    const turn = Math.acos(dot);
+    const cross = d1[0] * d2[1] - d1[1] * d2[0];
+    const rad = cur[2];
+    const here: Pt = [cur[0], cur[1]];
+    if (!(rad > 0) || turn < 1e-6) return { a: here, b: here, rad: 0, sweep: 1 as 0 | 1 };
+    const t = rad * Math.tan(turn / 2);
+    return {
+      a: [cur[0] - d1[0] * t, cur[1] - d1[1] * t] as Pt,
+      b: [cur[0] + d2[0] * t, cur[1] + d2[1] * t] as Pt,
+      rad,
+      sweep: (cross > 0 ? 1 : 0) as 0 | 1,
+    };
+  });
+  const first = seg[0];
+  if (!first) return "";
+  const out = path().move(first.b);
+  for (let i = 1; i <= n; i++) {
+    const s = seg[i % n];
+    if (!s) continue;
+    out.line(s.a);
+    if (s.rad > 0) out.arc(s.b, s.rad, s.sweep);
+  }
+  return out.close().out;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +325,112 @@ export function geometry(p: M1911Params): Geometry {
     guardFront: 104, guardRear: 81, guardBot: slideBot + 40.6,
     dustNose: Math.min(p.dustCover, muzzleX - 28),
     dustBot,
+  };
+}
+
+/** A cubic run of the frame outline. A straight leg has its controls at the ends. */
+interface Seg { a: Pt; c1: Pt; c2: Pt; b: Pt }
+
+/**
+ * The frame's lower boundary, from the top of the front strap round the toe
+ * and butt to the top of the mainspring housing.
+ *
+ * framePart draws itself from these control points and the magazine ray-casts
+ * against them to find where its tube leaves the receiver, so the two cannot
+ * drift apart when the grip is re-raked or re-lengthened.
+ */
+function frameLowerEdge(g: Geometry): Seg[] {
+  const bF = g.buttFront;
+  const bR = g.buttRear;
+  const gR = g.gripTopRear;
+  const T1: Pt = [bF[0] - 15, bF[1] + 9.5];
+  const T2: Pt = [bR[0] + 7, bR[1] + 3];
+  const T3: Pt = [bR[0], bR[1] - 4];
+  const straight = (a: Pt, b: Pt): Seg => ({ a, c1: a, c2: b, b });
+  return [
+    straight(g.gripTopFront, bF),                                              // front strap
+    { a: bF, c1: [bF[0] - 1, bF[1] + 6], c2: [bF[0] - 7, bF[1] + 9], b: T1 },  // toe
+    straight(T1, T2),                                                          // butt
+    { a: T2, c1: [bR[0] + 2, bR[1] + 3], c2: [bR[0] - 1, bR[1] + 1], b: T3 },  // heel
+    { a: T3, c1: [bR[0] - 1.5, bR[1] - 26], c2: [gR[0] - 6, gR[1] + 22], b: [gR[0] - 0.5, gR[1] - 4] },
+  ];
+}
+
+function cubicAt(s: Seg, t: number): Pt {
+  const k = 1 - t;
+  const w = [k * k * k, 3 * k * k * t, 3 * k * t * t, t * t * t];
+  return [
+    w[0]! * s.a[0] + w[1]! * s.c1[0] + w[2]! * s.c2[0] + w[3]! * s.b[0],
+    w[0]! * s.a[1] + w[1]! * s.c1[1] + w[2]! * s.c2[1] + w[3]! * s.b[1],
+  ];
+}
+
+/** The lower boundary as a polyline, fine enough to intersect against. */
+function sampleLowerEdge(g: Geometry, per = 24): Pt[] {
+  const pts: Pt[] = [];
+  for (const s of frameLowerEdge(g)) {
+    for (let i = 0; i <= per; i++) pts.push(cubicAt(s, i / per));
+  }
+  return pts;
+}
+
+/** A cubic as four points, for splitting and measuring. */
+type Cubic = [Pt, Pt, Pt, Pt];
+
+const asCubic = (s: Seg): Cubic => [s.a, s.c1, s.c2, s.b];
+
+function bez(c: Cubic, t: number): Pt {
+  const k = 1 - t;
+  const w = [k * k * k, 3 * k * k * t, 3 * k * t * t, t * t * t];
+  return [
+    w[0]! * c[0][0] + w[1]! * c[1][0] + w[2]! * c[2][0] + w[3]! * c[3][0],
+    w[0]! * c[0][1] + w[1]! * c[1][1] + w[2]! * c[2][1] + w[3]! * c[3][1],
+  ];
+}
+
+const mid = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+/** de Casteljau split: L is [0,t], R is [t,1]. */
+function splitCubic(c: Cubic, t: number): { L: Cubic; R: Cubic } {
+  const p01 = mid(c[0], c[1], t), p12 = mid(c[1], c[2], t), p23 = mid(c[2], c[3], t);
+  const a = mid(p01, p12, t), b = mid(p12, p23, t);
+  const m = mid(a, b, t);
+  return { L: [c[0], p01, a, m], R: [m, b, p23, c[3]] };
+}
+
+function cubicLen(c: Cubic, t0: number, t1: number, n = 48): number {
+  let total = 0;
+  let prev = bez(c, t0);
+  for (let i = 1; i <= n; i++) {
+    const q = bez(c, t0 + ((t1 - t0) * i) / n);
+    total += Math.hypot(q[0] - prev[0], q[1] - prev[1]);
+    prev = q;
+  }
+  return total;
+}
+
+/** Bisect for the t where pred flips from false to true. */
+function solveT(pred: (t: number) => boolean, iters = 40): number {
+  let lo = 0, hi = 1, t = 0.5;
+  for (let i = 0; i < iters; i++) {
+    t = (lo + hi) / 2;
+    if (pred(t)) hi = t; else lo = t;
+  }
+  return t;
+}
+
+/**
+ * The frame's tang, as the two cubics framePart draws it with: the top surface
+ * running forward from the tang tip onto the rail, and the upper backstrap
+ * running from the mainspring housing back up to the tip. The beavertail is
+ * cut from these, so it lands on the frame rather than crossing it.
+ */
+function frameTangEdge(g: Geometry, tangX: number): { top: Cubic; upper: Cubic } {
+  const T: Pt = [tangX, g.tangY];
+  const gR = g.gripTopRear;
+  return {
+    top: [T, [tangX + 3, g.tangY - 1.5], [15, g.slideBot], [19.5, g.slideBot]],
+    upper: [[gR[0] - 0.5, gR[1] - 4], [gR[0], g.tangY + 8.5], [tangX + 4, g.tangY + 3.5], T],
   };
 }
 
@@ -321,7 +506,14 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
 
   if (p.ejectionPort) det.push(box(x0 + 99, yT + 4, Math.min(36, (x1 - x0) * 0.19), 10, 2));
 
-  if (p.sight === "gi") {
+  // A slide milled for an optic has had the rear dovetail cut away — you can't
+  // have the blade and the sight in the same slot.
+  if (p.optic !== "none") {
+    const cut0 = x0 + 42;
+    const cut1 = x0 + 96;
+    det.push(path().move([cut0 - 3, yT]).line([cut0, yT + 2.6])
+      .line([cut1, yT + 2.6]).line([cut1 + 3, yT]).out);
+  } else if (p.sight === "gi") {
     det.push(path().move([x0 + 5, yT]).line([x0 + 5, yT - 3.4]).line([x0 + 10, yT - 3.4]).line([x0 + 10, yT]).out);
     det.push(box(x1 - 16, yT - 3, 3.6, 3));
   } else if (p.sight === "combat") {
@@ -339,7 +531,11 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
     id: "slide", label: "Slide", slot: "slide", category: "slide",
     outline, paths: det,
     bbox: [x0, yT - 5, x1 - x0, yB - yT + 5],
-    anchors: { mount: [x0 + 12, yB], muzzle: [x1, (yT + yB) / 2] },
+    anchors: {
+      mount: [x0 + 12, yB],
+      muzzle: [x1, (yT + yB) / 2],
+      optic: [x0 + 60, yT],          // where an optic cut would be milled
+    },
     z: 8,
   };
 }
@@ -381,6 +577,7 @@ function framePart(p: M1911Params, g: Geometry): GeneratedPart {
     buttRear, buttFront, guardFront: gf, guardBot, dustNose: dn,
   } = g;
   const tangX = p.beavertail ? 4 : 8;
+  const lower = frameLowerEdge(g);
 
   const outline = [
     path()
@@ -400,22 +597,11 @@ function framePart(p: M1911Params, g: Geometry): GeneratedPart {
         gripTopFront,
       )
       .line(buttFront)                                                       // front strap
-      .curve(
-        [buttFront[0] - 1, buttFront[1] + 6],
-        [buttFront[0] - 7, buttFront[1] + 9],
-        [buttFront[0] - 15, buttFront[1] + 9.5],
-      )
-      .line([buttRear[0] + 7, buttRear[1] + 3])                              // butt
-      .curve(
-        [buttRear[0] + 2, buttRear[1] + 3],
-        [buttRear[0] - 1, buttRear[1] + 1],
-        [buttRear[0], buttRear[1] - 4],
-      )
-      .curve(                                                                // mainspring housing
-        [buttRear[0] - 1.5, buttRear[1] - 26],
-        [gripTopRear[0] - 6, gripTopRear[1] + 22],
-        [gripTopRear[0] - 0.5, gripTopRear[1] - 4],
-      )
+      // toe, butt, heel and mainspring housing — shared with the magazine
+      .curve(lower[1]!.c1, lower[1]!.c2, lower[1]!.b)
+      .line(lower[2]!.b)
+      .curve(lower[3]!.c1, lower[3]!.c2, lower[3]!.b)
+      .curve(lower[4]!.c1, lower[4]!.c2, lower[4]!.b)
       .curve([gripTopRear[0], tangY + 8.5], [tangX + 4, tangY + 3.5], [tangX, tangY])
       .close().out,
     // trigger guard opening: taller at the front, sweeping back to the trigger
@@ -468,6 +654,8 @@ function framePart(p: M1911Params, g: Geometry): GeneratedPart {
       trigger: [76, yb + 16.6],
       gripPanel: gripPoint(g, 0.15, 0.06),
       magwell: gripPoint(g, 0.33, 0.1),
+      rail: [dn - 30, dustBot],      // accessory rail under the dust cover
+      tang: [tangX, tangY],          // grip-safety pivot
     },
     z: 1,
   };
@@ -544,35 +732,177 @@ function gripPanelPart(p: M1911Params, g: Geometry): GeneratedPart {
   };
 }
 
-const MAG_EXTRA: Record<MagLength, number> = { compact: -12, standard: 0, extended: 16 };
+/**
+ * M1911A1 seven-round .45 ACP box magazine.
+ *
+ * Dimensions off the Springfield Armory sheets (C8694 assembly, C8695 tube,
+ * B7310043 base). The tube is 34.8 front-to-back on the drawing because a .45
+ * round is 32.4 long and lies across the box — in side elevation you see the
+ * cartridge end to end, which is why a magazine looks wide here and narrow
+ * from the front. Scaled to 33 so it holds the true 0.61 tube-to-grip ratio
+ * against this frame's 54 mm grip.
+ *
+ * The tube is a straight parallel box, never a wedge: it runs parallel to the
+ * front strap at a constant stand-off (the receiver wall) and rakes with the
+ * grip. Its bottom is found by ray-casting each wall against the frame's own
+ * lower edge, so the floorplate lands flush on the butt at any rake or grip
+ * length rather than at a guessed line.
+ */
+const MAG_W = 33;          // tube, front to back
+const MAG_GAP = 4;         // stand-off from the front strap = receiver wall
+const MAG_LIP_DROP = 2.6;  // feed-lip peak, below the frame rail
+const MAG_U_PEAK = 0.32;   // peak, across the tube from the front wall
+const MAG_FRONT_DROP = 10.6;
+const MAG_REAR_DROP = 7.3;
+const MAG_PLATE_T = 3;
+const MAG_PLATE_OVER = 1.5;
+const MAG_HOLE_PITCH = 12.4;   // one .45 ACP case diameter
+const MAG_HOLE_U = [0.79, 0.42];
+
+const v2 = {
+  add: (a: Pt, b: Pt, k = 1): Pt => [a[0] + b[0] * k, a[1] + b[1] * k],
+  sub: (a: Pt, b: Pt): Pt => [a[0] - b[0], a[1] - b[1]],
+  len: (a: Pt) => Math.hypot(a[0], a[1]),
+  unit: (a: Pt): Pt => {
+    const l = Math.hypot(a[0], a[1]) || 1;
+    return [a[0] / l, a[1] / l];
+  },
+};
+
+/** Intersection of line (A + s*u) with line (B + t*v). */
+function meet(A: Pt, u: Pt, B: Pt, v: Pt): Pt {
+  const den = u[0] * v[1] - u[1] * v[0];
+  if (Math.abs(den) < 1e-9) return A;
+  const s = ((B[0] - A[0]) * v[1] - (B[1] - A[1]) * v[0]) / den;
+  return [A[0] + u[0] * s, A[1] + u[1] * s];
+}
+
+/** How far down its own axis a wall runs before it leaves the receiver. */
+function exitAt(A: Pt, d: Pt, edge: Pt[], tMin: number): number {
+  let best = Infinity;
+  for (let i = 0; i + 1 < edge.length; i++) {
+    const a = edge[i]!;
+    const b = edge[i + 1]!;
+    const w = v2.sub(b, a);
+    const den = d[0] * -w[1] - d[1] * -w[0];
+    if (Math.abs(den) < 1e-9) continue;
+    const rx = a[0] - A[0];
+    const ry = a[1] - A[1];
+    const t = (rx * -w[1] - ry * -w[0]) / den;   // along the wall
+    const s = (d[0] * ry - d[1] * rx) / den;     // along the edge segment
+    if (s >= 0 && s <= 1 && t > tMin && t < best) best = t;
+  }
+  return best;
+}
 
 function magazinePart(p: M1911Params, g: Geometry): GeneratedPart {
-  const extra = MAG_EXTRA[p.magazine] / p.gripLength; // as a fraction of the grip
-  const U0 = 0.33, U1 = 0.67, V0 = 0.1, V1 = 0.92 + extra;
-  const A = gripPoint(g, U0, V0);
-  const B = gripPoint(g, U1, V0);
-  const C = gripPoint(g, U1, V1);
-  const D = gripPoint(g, U0, V1);
-  const outline = [path().move(A).line(B).line(C).line(D).close().out];
+  const kind = p.magazine;
+  const { add, sub, unit, len } = v2;
+
+  // Tube axis = the front strap, so the magazine rakes with the grip.
+  const d = unit(sub(g.buttFront, g.gripTopFront));
+  const n: Pt = [-d[1], d[0]];                       // across the tube, rearwards
+  const F0 = add(g.gripTopFront, n, MAG_GAP);        // front wall at the grip top
+  const R0 = add(F0, n, MAG_W);                      // rear wall at the grip top
+  const at = (u: number, t: number): Pt => add(add(F0, n, u), d, t);
+
+  // Feed lips ride just under the frame rail.
+  const tPeak = (g.slideBot + MAG_LIP_DROP - F0[1] - n[1] * (MAG_U_PEAK * MAG_W)) / d[1];
+  const PK = at(MAG_U_PEAK * MAG_W, tPeak);
+  const FT = at(0, tPeak + MAG_FRONT_DROP);
+  const RT = at(MAG_W, tPeak + MAG_REAR_DROP);
+
+  // Bottom: cut where the receiver ends so the floorplate lands on the butt.
+  const edge = sampleLowerEdge(g);
+  const drop = kind === "compact" ? -12 : 0;         // flush with the butt
+  const fall = len(sub(g.buttFront, g.gripTopFront)) + 12;
+  const hit = (A: Pt) => {
+    const t = exitAt(A, d, edge, tPeak);
+    return Number.isFinite(t) ? t : fall;
+  };
+  // Each wall is cut where it actually leaves the receiver, so the floorplate
+  // lands flush along the whole butt. The frame's butt is not quite square to
+  // the grip axis, so a square-cut base would sit proud at the toe and buried
+  // at the heel; the tube itself is hidden behind the panel, so only the plate
+  // has to agree with the frame.
+  const P0 = at(0, hit(F0) + drop);
+  const P1 = at(MAG_W, hit(R0) + drop);
+  const e = unit(sub(P1, P0));                       // along the butt, rearwards
+  const m: Pt = [e[1], -e[0]];                       // off the butt, downwards
+  const tubeBot = add(P0, m, -MAG_PLATE_T);
+  const FB = meet(F0, d, tubeBot, e);
+  const RB = meet(R0, d, tubeBot, e);
+
+  const outline = [
+    roundPoly([
+      [FB[0], FB[1], 0], [FT[0], FT[1], 2], [PK[0], PK[1], 2.4],
+      [RT[0], RT[1], 3.5], [RB[0], RB[1], 0],
+    ]),
+  ];
+
+  // Floorplate, proud of the tube fore and aft.
+  const PF = add(meet(F0, d, P0, e), e, -MAG_PLATE_OVER);
+  const PR = add(meet(R0, d, P0, e), e, MAG_PLATE_OVER);
+  const pfT = add(PF, m, -MAG_PLATE_T);
+  const prT = add(PR, m, -MAG_PLATE_T);
+  outline.push(roundPoly([
+    [pfT[0], pfT[1], 0.6], [prT[0], prT[1], 0.6], [PR[0], PR[1], 0.6], [PF[0], PF[1], 0.6],
+  ]));
+
   const det: string[] = [];
-  const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  // floorplate, a touch wider than the tube
-  const fA = lerp(D, A, -0.09);
-  const fB = lerp(C, B, -0.09);
-  det.push(path().move(D).line(C).line(fB).line(fA).close().out);
-  const holes = p.magazine === "extended" ? 5 : p.magazine === "compact" ? 3 : 4;
-  for (let i = 0; i < holes; i++) {
-    const t = 0.28 + (0.62 * i) / Math.max(1, holes - 1);
-    const q = lerp(lerp(A, D, t), lerp(B, C, t), 0.68);
-    det.push(circle(q[0], q[1], 1.4));
+  // the dimple the mainspring housing's plate drops into
+  const pMid = add(add(PF, e, len(sub(PR, PF)) * 0.42), m, -MAG_PLATE_T * 0.5);
+  const dim = (du: number, dv: number) => add(add(pMid, e, du), m, dv);
+  det.push(roundPoly([
+    [...dim(-3.6, -0.75), 0] as Vert, [...dim(3.6, -0.75), 0] as Vert,
+    [...dim(3.6, 0.75), 0] as Vert, [...dim(-3.6, 0.75), 0] as Vert,
+  ]));
+
+  if (kind === "extended") {
+    const a0 = add(PF, e, -2);
+    const a1 = add(PR, e, 2);
+    const b1 = add(a1, m, 13);
+    const b0 = add(a0, m, 13);
+    outline.push(roundPoly([
+      [a0[0], a0[1], 0], [a1[0], a1[1], 0], [b1[0], b1[1], 2.4], [b0[0], b0[1], 2.4],
+    ]));
+    det.push(path()
+      .move(add(add(a0, m, 6.8), e, 2.4))
+      .line(add(add(a1, m, 6.8), e, -2.4)).out);
   }
-  const xs = [A[0], B[0], C[0], D[0], fA[0], fB[0]];
-  const ys = [A[1], B[1], C[1], D[1], fA[1], fB[1]];
+
+  // Witness holes: two staggered columns one cartridge pitch apart.
+  const holes = kind === "extended" ? 6 : kind === "compact" ? 4 : 5;
+  for (let i = 0; i < holes; i++) {
+    const q = at(MAG_HOLE_U[i % 2]! * MAG_W, tPeak + 28 + i * MAG_HOLE_PITCH);
+    det.push(circle(q[0], q[1], 2));
+  }
+
+  // Magazine-catch notch, open on the front wall so it reads as a cut into the
+  // silhouette rather than a rectangle floating inside it.
+  const tN = (g.slideBot + 24 - F0[1]) / d[1];
+  det.push(path()
+    .move(at(0.4, tN))
+    .line(at(7.3, tN))
+    .arc(at(8, tN + 0.7), 0.7, 0)
+    .line(at(8, tN + 3.3))
+    .arc(at(7.3, tN + 4), 0.7, 0)
+    .line(at(0.4, tN + 4)).out);
+
+  // The far feed lip: starts on the peak and lands on the rear wall, so both
+  // ends terminate on the silhouette instead of in mid-air.
+  det.push(path()
+    .move(PK)
+    .line(at(MAG_W * 0.62, tPeak + 3.4))
+    .line(RT).out);
+
+  const xs = [FB, FT, PK, RT, RB, PF, PR].map((q) => q[0]);
+  const ys = [FB, FT, PK, RT, RB, PF, PR].map((q) => q[1]);
   return {
     id: "magazine", label: "Magazine", slot: "magwell", category: "magazine",
     outline, paths: det,
     bbox: [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)],
-    anchors: { mount: [A[0], A[1]] },
+    anchors: { lips: PK, base: P0 },
     z: 2,
   };
 }
@@ -656,10 +986,420 @@ function triggerPart(p: M1911Params, g: Geometry): GeneratedPart {
 }
 
 // ---------------------------------------------------------------------------
+// Attachments — fitted parts, each anchored to a socket on its host
+// ---------------------------------------------------------------------------
+
+/**
+ * Extended beavertail grip safety, memory-bump pattern.
+ *
+ * Cut from the frame's own tang and backstrap curves: the top surface
+ * continues the frame's top line, the blade runs 38 mm of backstrap arc down
+ * from the tang, and the front seam is closed by the .250 in radius relief cut
+ * centred on the thumb-safety pin — the cut a smith actually makes to fit one.
+ */
+function beavertailPart(p: M1911Params, g: Geometry): GeneratedPart {
+  void p;
+  const yb = g.slideBot;
+  const tangX = 4;                                   // fitted tang sits further back
+  const T: Pt = [tangX, g.tangY];
+  const { top: topEdge, upper } = frameTangEdge(g, tangX);
+  const msh = asCubic(frameLowerEdge(g)[4]!);
+
+  // .250 in relief centred on the thumb-safety pin.
+  const R = 6.35;
+  const pin: Pt = [g.slideRear + 2, yb + 5.6];
+  const tA = solveT((t) => {
+    const q = bez(topEdge, t);
+    return Math.hypot(q[0] - pin[0], q[1] - pin[1]) <= R;
+  });
+  const A = bez(topEdge, tA);
+  const topSeg = splitCubic(topEdge, tA).L;
+  const ang = (125 * Math.PI) / 180;
+  const B: Pt = [pin[0] + R * Math.cos(ang), pin[1] + R * Math.sin(ang)];
+
+  // Web pocket: the most forward point of the upper backstrap.
+  let tPocket = 0;
+  for (let i = 0; i <= 200; i++) {
+    if (bez(upper, i / 200)[0] > bez(upper, tPocket)[0]) tPocket = i / 200;
+  }
+  const pocket = bez(upper, tPocket);
+  const upSeg = splitCubic(upper, tPocket).L;
+
+  // Blade runs 38 mm of backstrap arc down from the tang.
+  const upLen = cubicLen(upper, 0, 1);
+  const tb = solveT((t) => upLen + cubicLen(msh, t, 1) <= 38);
+  const heel = bez(msh, tb);
+  const lowSeg = splitCubic(msh, tb).R;
+
+  /** The backstrap point at a given height, in the blade region. */
+  const bs = (y: number): Pt => bez(msh, solveT((t) => bez(msh, t)[1] <= y));
+
+  const tipTop: Pt = [tangX - 7, g.tangY + 2.7];
+  const tipBot: Pt = [tangX - 5.9, g.tangY + 6.3];
+  const seamKnee: Pt = [18.8, yb + 24.6];
+  const seamBot: Pt = [16.5, yb + 36.6];
+  const joint: Pt = [15.4, yb + 39.1];
+
+  const outline = [
+    path()
+      .move(A)
+      .curve(topSeg[2], topSeg[1], T)                       // frame's own top line
+      .curve([tangX - 1.8, g.tangY + 0.9], [tangX - 4.2, g.tangY + 1.7], tipTop)
+      .arc(tipBot, 2, 0)
+      .curve([tipBot[0] + 3.6, tipBot[1] + 0.4], [pocket[0], pocket[1] - 2.1], pocket)
+      .curve(upSeg[2], upSeg[1], upper[0])                  // the part IS the backstrap here
+      .curve(lowSeg[1], lowSeg[2], heel)
+      .line(joint)                                          // joint with the mainspring housing
+      .arc(seamBot, 2, 0)
+      .curve([17.4, yb + 32.6], [seamKnee[0], seamKnee[1] + 4], seamKnee)
+      .curve([18.8, yb + 18.6], [B[0] + 3.7, B[1] + 2.6], B)
+      .arc(A, R, 1)
+      .close().out,
+  ];
+
+  // Memory-groove pad.
+  const padTopY = yb + 22.1, padBotY = yb + 35.1;
+  const pt0 = bs(padTopY), pb0 = bs(padBotY);
+  const REAR = 0.9, FRONT = 5.6, PR = 1.4;
+  const det = [
+    path()
+      .move([pt0[0] + REAR + PR, padTopY])
+      .line([pt0[0] + FRONT - PR, padTopY]).arc([pt0[0] + FRONT, padTopY + PR], PR, 1)
+      .line([pb0[0] + FRONT, padBotY - PR]).arc([pb0[0] + FRONT - PR, padBotY], PR, 1)
+      .line([pb0[0] + REAR + PR, padBotY]).arc([pb0[0] + REAR, padBotY - PR], PR, 1)
+      .line([pt0[0] + REAR, padTopY + PR]).arc([pt0[0] + REAR + PR, padTopY], PR, 1)
+      .close().out,
+  ];
+  for (let i = 0; i < 4; i++) {
+    const y = padTopY + 2.6 + i * 2.4;
+    const q = bs(y);
+    det.push(path().move([q[0] + REAR + 0.7, y]).line([q[0] + FRONT - 0.7, y]).out);
+  }
+  // hammer pocket: the countersink that lets a ring hammer drop in
+  det.push(path()
+    .move([tangX + 1.6, g.tangY + 0.8])
+    .curve([tangX - 1.7, g.tangY + 2.2], [tangX - 4.6, g.tangY + 2.9], [tipTop[0] + 1.4, tipTop[1] + 1.5])
+    .out);
+
+  return {
+    id: "beavertail", label: "Beavertail safety", slot: "tang", category: "safety",
+    outline, paths: det,
+    bbox: [tangX - 7, g.tangY - 2, 30, yb + 41 - g.tangY],
+    anchors: { pin: pin },
+    z: 6,
+  };
+}
+
+function compensatorPart(p: M1911Params, g: Geometry): GeneratedPart {
+  void p;
+  const OAL = 54.61;
+  const yc = g.slideBot / 2;
+  const R = Math.min(25.27, g.slideBot * 0.995) / 2;
+  const yT = yc - R;
+  const yB = yc + R;
+  const face = g.muzzleX;
+  const x0 = face;                           // butts the muzzle plane, no overlap
+  const x1 = face + OAL;
+  const chamR = R * 0.596;
+  const roof = yc - chamR;
+  const chamBot = yc + chamR;
+  const bore = 5.08;                         // .400 in through hole
+  const thread = 8.7;                        // .685-40 thread bore
+  const pr = 1.2, cr = 2, rr = 1.5;
+  const ports: [number, number][] = [
+    [face + 7, face + 17],                   // oversize, takes the first hit
+    [face + 21, face + 29.5],
+    [face + 33.5, face + 42],
+  ];
+  const relX = face + 8;                     // guide-rod head relief, bottom rear
+  const relD = 2;
+
+  const body = path().move([x0, yT]);
+  for (const [a, b] of ports) {
+    body
+      .line([a, yT])
+      .line([a, roof - pr]).arc([a + pr, roof], pr, 0)
+      .line([b - pr, roof]).arc([b, roof - pr], pr, 0)
+      .line([b, yT]);
+  }
+  body
+    .line([x1 - cr, yT]).arc([x1, yT + cr], cr, 1)
+    .line([x1, yB - cr]).arc([x1 - cr, yB], cr, 1)
+    .line([relX + rr, yB]).arc([relX, yB - rr], rr, 1)
+    .line([relX, yB - relD + rr]).arc([relX - rr, yB - relD], rr, 0)
+    .line([x0, yB - relD])
+    .line([x0, yT])
+    .close();
+
+  const chamStart = face + 5.6;
+  const chamEnd = face + 42;
+  const crown = chamEnd + 4;                 // cone from the chamber down to the bore
+  const seg = (ax: number, ay: number, bx: number, by: number) =>
+    path().move([ax, ay]).line([bx, by]).out;
+
+  // Everything the bullet passes through, in side elevation: thread bore, the
+  // step onto the expansion chamber, the chamber itself, the cone, then the
+  // .400 bore out to the muzzle face. No line ends in mid-air.
+  const det = [
+    seg(x0, yT, x0, yB - relD),                          // joint with the barrel
+    seg(x0, yc - thread, chamStart, yc - thread),        // thread bore
+    seg(x0, yc + thread, chamStart, yc + thread),
+    seg(chamStart, yc - thread, chamStart, roof),        // step onto the chamber
+    seg(chamStart, chamBot, chamStart, yc + thread),
+    seg(chamStart, chamBot, chamEnd, chamBot),           // chamber floor
+    seg(chamEnd, roof, crown, yc - bore),                // cone into the bore
+    seg(chamEnd, chamBot, crown, yc + bore),
+    seg(crown, yc - bore, x1, yc - bore),                // bore to the muzzle face
+    seg(crown, yc + bore, x1, yc + bore),
+    seg(x1 - 2.2, yc - bore, x1, yc - bore - 1.6),       // crown chamfer
+    seg(x1 - 2.2, yc + bore, x1, yc + bore + 1.6),
+  ];
+  // Chamber roof, broken where the ports cut through it.
+  const roofRuns: [number, number][] = [
+    [chamStart, ports[0]![0]],
+    [ports[0]![1], ports[1]![0]],
+    [ports[1]![1], ports[2]![0]],
+    [ports[2]![1], chamEnd],
+  ];
+  for (const [a, b] of roofRuns) {
+    if (b - a > 2.5) det.push(seg(a, roof, b, roof));
+  }
+
+  return {
+    id: "compensator", label: "Compensator", slot: "muzzle", category: "muzzle",
+    outline: [body.out], paths: det,
+    bbox: [x0, yT, x1 - x0, R * 2],
+    anchors: { thread: [face, yc] },
+    z: 9,
+  };
+}
+
+/**
+ * SilencerCo Osprey 45, 200.7 long on a 33 x 44.45 profile, 0.578-28 piston.
+ *
+ * The Osprey is eccentric — the bore rides high in the tube so the mass hangs
+ * below the sight line rather than blocking it. The offset splits the
+ * published 44.45 height as 16.3 above the bore and 28.15 below it, which puts
+ * the tube's top level with a GI front-sight blade.
+ */
+function suppressorPart(p: M1911Params, g: Geometry): GeneratedPart {
+  void p;
+  const bore = g.slideBot / 2;
+  const x0 = g.muzzleX;
+  const LEN = 200.7;
+  const TOP = bore - 16.3;
+  const BOT = bore + 28.15;
+  const xb0 = x0 + 10;                 // tube rear face, past the piston + boss
+  const xb1 = x0 + LEN;
+  const rShank = 6.6, rBoss = 9.2, xStep = x0 + 5.7;
+  const rc = 2, ch = 3;
+  const scA = xb1 - 12, scB = xb1 - 5, scR = 6.6;   // wrench scallops in the cap rim
+  const facetT = TOP + 7.2, facetB = BOT - 8;
+
+  const mount = path()
+    .move([x0, bore - rShank]).line([xStep, bore - rShank])
+    .line([xStep, bore - rBoss]).line([xb0, bore - rBoss])
+    .line([xb0, bore + rBoss]).line([xStep, bore + rBoss])
+    .line([xStep, bore + rShank]).line([x0, bore + rShank])
+    .close().out;
+
+  const tube = path()
+    .move([xb0 + rc, TOP])
+    .line([scA, TOP]).arc([scB, TOP], scR, 0)
+    .line([xb1 - ch, TOP]).line([xb1, TOP + ch])
+    .line([xb1, BOT - ch]).line([xb1 - ch, BOT])
+    .line([scB, BOT]).arc([scA, BOT], scR, 0)
+    .line([xb0 + rc, BOT]).arc([xb0, BOT - rc], rc, 1)
+    .line([xb0, TOP + rc]).arc([xb0 + rc, TOP], rc, 1)
+    .close().out;
+
+  const seg = (ax: number, ay: number, bx: number, by: number) =>
+    path().move([ax, ay]).line([bx, by]).out;
+  const det = [
+    seg(xb0, facetT, xb1, facetT),                 // polygonal facet edges
+    seg(xb0, facetB, xb1, facetB),
+    seg(xb0 + 44, TOP, xb0 + 44, BOT),             // mount-module joint
+    seg(xb1 - 14, TOP, xb1 - 14, BOT),             // end-cap joint
+    seg(xStep, bore - rShank, xStep, bore + rShank),
+    circle(xb0 + 6.5, BOT - 13.5, 3.4),            // push-button index release
+    circle(xb0 + 6.5, BOT - 13.5, 1.5),
+    // laser-engraved data block on the mount module
+    box(xb0 + 15, facetT + 4.5, 24, 9, 1),
+    // tube section seams, so 130 mm of tube is not left blank
+    seg(xb0 + 92, facetT, xb0 + 92, facetB),
+    seg(xb0 + 134, facetT, xb0 + 134, facetB),
+  ];
+  for (let i = 0; i < 5; i++) {                    // engraved band under the seams
+    const bx = xb0 + 100 + i * 6;
+    det.push(seg(bx, facetB - 3, bx + 3.4, facetB - 9));
+  }
+
+  return {
+    id: "suppressor", label: "Suppressor", slot: "muzzle", category: "muzzle",
+    outline: [mount, tube], paths: det,
+    bbox: [x0, TOP, LEN, BOT - TOP],
+    anchors: { thread: [x0, bore] },
+    z: 9,
+  };
+}
+
+/**
+ * Miniature reflex sight after the Trijicon RM06: 45 x 25.4 overall, 21 x 16
+ * objective. Sits on a low adapter plate over a milled cut in the rear half of
+ * the slide, so the whole assembly is at negative y.
+ */
+function opticPart(p: M1911Params, g: Geometry): GeneratedPart {
+  void p;
+  const L = 45, H = 25.4, PLATE = 2.6;
+  const X0 = g.slideRear + 46;
+  const yBase = g.slideTop - PLATE;
+  const yTop = yBase - H;
+  const X = (u: number) => X0 + u;
+  const Y = (v: number) => yTop + v;
+  const V = (u: number, v: number, rad: number): Vert => [X(u), Y(v), rad];
+
+  // roof -> front face -> base -> rear face -> chamfer -> rear deck -> ramp
+  const body = roundPoly([
+    V(29, 0, 2.6),
+    V(41.14, 0, 4),
+    V(45, 25.4, 1.2),
+    V(0, 25.4, 0.85),
+    V(0, 17.7, 1.5),
+    V(3.44, 13.6, 1.5),
+    V(22.2, 13.6, 3.6),
+  ]);
+  // Objective aperture, raked with the front face so it leans forward as it drops.
+  const aperture = roundPoly([
+    V(30.8, 4.2, 1.2), V(39.3, 4.2, 1.2), V(41.7, 20.2, 1.2), V(31.6, 20.2, 1.2),
+  ]);
+  const plate = roundPoly([
+    [X0 - 2.4, g.slideTop, 0.5],
+    [X0 - 1, yBase, 0.5],
+    [X0 + L + 1, yBase, 0.5],
+    [X0 + L + 2.4, g.slideTop, 0.5],
+  ]);
+
+  const det = [
+    // reflector: concave element raked back toward the eye
+    path()
+      .move([X(41), Y(19.6)])
+      .curve([X(39.95), Y(14.33)], [X(38.29), Y(9.27)], [X(36), Y(4.4)]).out,
+    // LED emitter boss on the housing floor
+    path().move([X(32.5), Y(20.2)]).line([X(32.5), Y(18.3)])
+      .line([X(34.5), Y(18.3)]).line([X(34.5), Y(20.2)]).out,
+    // machined chamfer along the sidewall, ramp and roof
+    path().move([X(24.6), Y(12.6)]).line([X(29.7), Y(2.4)])
+      .line([X(31.2), Y(1.3)]).line([X(38.6), Y(1.3)]).out,
+    circle(X(8.5), Y(21), 2.8),
+    path().move([X(6.3), Y(21)]).line([X(10.7), Y(21)]).out,
+    path().move([X(4.4), Y(13.6)]).line([X(4.4), Y(14.6)])
+      .line([X(9.4), Y(14.6)]).line([X(9.4), Y(13.6)]).out,
+    circle(X(15.6), Y(16.3), 1.1),
+    circle(X(7), yBase + PLATE / 2, 1),
+    circle(X(38), yBase + PLATE / 2, 1),
+  ];
+
+  return {
+    id: "optic", label: "Reflex sight", slot: "optic", category: "optic",
+    outline: [body, aperture, plate], paths: det,
+    bbox: [X0 - 3, yTop, L + 6, H + PLATE],
+    anchors: { mount: [X0 + L / 2, g.slideTop] },
+    z: 10,
+  };
+}
+
+/**
+ * Streamlight TLR-1 HL clamped under the dust cover: 87 long, 36.5 tall from
+ * the rail face, 29.4 bezel. The rear switch housing steps down twice — that
+ * staircase is the relief that clears a pistol's trigger-guard front — and the
+ * recoil key rises into one of the frame's rail cross-slots.
+ *
+ * Mounted as far rearward as the guard allows, the way anyone actually runs
+ * one, so the bezel stops short of the muzzle.
+ */
+function lightPart(p: M1911Params, g: Geometry): GeneratedPart {
+  void p;
+  const LEN = 87;
+  const yTop = g.dustBot;                    // clamp face on the rail underside
+  const xNose = Math.max(g.guardFront + 1 + LEN, Math.min(g.dustNose + 6, g.muzzleX - 6));
+  const X = (u: number) => xNose - u;
+  const Y = (v: number) => yTop + v;
+  const V = (u: number, v: number, rad = 0): Vert => [X(u), Y(v), rad];
+
+  // Recoil key: engage whichever frame cross-slot sits under the clamp platform.
+  const platRear = X(58.1);
+  const platFront = X(29.6);
+  const mid = (platRear + platFront) / 2;
+  let slot: number | null = null;
+  for (let rx = g.dustNose - 40; rx < g.dustNose - 6; rx += 9) {
+    if (rx < platRear + 1 || rx + 5.2 > platFront - 1) continue;
+    if (slot === null || Math.abs(rx + 2.6 - mid) < Math.abs(slot + 2.6 - mid)) slot = rx;
+  }
+
+  const body: Vert[] = [
+    V(76.6, 5.87, 2.2),                      // rear-top of the switch housing
+    V(67.4, 5.87, 1.6),                      // trigger-guard relief, lower step
+    V(63.1, 2.8, 1.2),                       // relief, upper step
+    V(61.7, 2.8, 1.2),
+    V(58.1, 0, 1.4),                         // clamp platform, rear
+  ];
+  if (slot !== null) {
+    body.push(
+      [slot, Y(0), 0.4], [slot, Y(-3.2), 0.4],
+      [slot + 5.2, Y(-3.2), 0.4], [slot + 5.2, Y(0), 0.4],
+    );
+  }
+  body.push(
+    V(29.6, 0, 2),                           // clamp platform, front
+    V(22, 7, 2),                             // head shoulder, top
+    V(0, 7, 2), V(0, 36.4, 2),               // bezel face
+    V(23.3, 36.4, 1.5), V(27.3, 32.15, 1.5),
+    V(63, 32.15, 1), V(64.4, 33.45, 1),
+    V(76.6, 33.45, 2.2),
+  );
+  // Rocker paddle: flat rear face rather than a wedge, and tall enough to read
+  // as a switch against the 33 mm rear housing.
+  const paddle: Vert[] = [
+    V(76.6, 15.5), V(85.8, 17.4, 1.5), V(85.8, 27.6, 1.5), V(76.6, 29.5),
+  ];
+
+  const seg = (ax: number, ay: number, bx: number, by: number) =>
+    path().move([ax, ay]).line([bx, by]).out;
+  const det: string[] = [];
+  // Head grip grooves, spread far enough apart to stay separate at pistol zoom.
+  for (const u of [12.5, 16.5, 20.5]) {
+    det.push(seg(X(u), Y(7.4), X(u), Y(36)));
+  }
+  det.push(
+    seg(X(8.6), Y(7.4), X(8.6), Y(36)),                 // bezel parting band
+    seg(X(2), Y(10.5), X(2), Y(32.9)),                  // lens behind the rim
+    // Rail clamp jaw: the block the crossbolt pulls up against the rail. This
+    // is the feature that makes a light read as clamped rather than floating.
+    box(X(58.1), Y(0), 28.5, 4.6, 0.8),
+    circle(X(48), Y(2.3), 2.75),                        // crossbolt
+    seg(X(50.4), Y(2.3), X(45.6), Y(2.3)),              // crossbolt slot
+    seg(X(27.5), Y(25.2), X(63), Y(25.2)),              // body chamfer
+    circle(X(38), Y(12.5), 4.5),                        // rotary mode selector
+    circle(X(38), Y(12.5), 1.5),
+  );
+  for (const u of [79.5, 81.5, 83.5]) {                 // paddle serrations
+    det.push(seg(X(u), Y(19), X(u), Y(26)));
+  }
+
+  return {
+    id: "light", label: "Weapon light", slot: "rail", category: "accessory",
+    outline: [roundPoly(body), roundPoly(paddle)], paths: det,
+    bbox: [X(86.6), Y(-3.2), 86.6, 39.7],
+    anchors: { clamp: [X(43.85), yTop] },
+    z: 9,
+  };
+}
+
+// ---------------------------------------------------------------------------
 
 export function generateM1911(p: M1911Params): GeneratedPart[] {
   const g = geometry(p);
-  return [
+  const parts: GeneratedPart[] = [
     framePart(p, g),
     magazinePart(p, g),
     gripPanelPart(p, g),
@@ -668,8 +1408,17 @@ export function generateM1911(p: M1911Params): GeneratedPart[] {
     barrelPart(p, g),
     slidePart(p, g),
   ];
+  // Attachments exist only while fitted, so the bench shows exactly what is on
+  // the gun. A muzzle device is exclusive — the thread only takes one.
+  if (p.beavertail) parts.push(beavertailPart(p, g));
+  if (p.muzzleDevice === "compensator") parts.push(compensatorPart(p, g));
+  if (p.muzzleDevice === "suppressor") parts.push(suppressorPart(p, g));
+  if (p.optic === "reflex") parts.push(opticPart(p, g));
+  if (p.light === "weapon") parts.push(lightPart(p, g));
+  return parts;
 }
 
 export const PART_ORDER = [
-  "frame", "magazine", "gripPanel", "trigger", "hammer", "barrel", "slide",
+  "frame", "magazine", "gripPanel", "trigger", "hammer", "beavertail",
+  "barrel", "slide", "compensator", "suppressor", "optic", "light",
 ];

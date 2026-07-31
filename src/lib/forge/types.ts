@@ -67,6 +67,43 @@ export function newBuild(): Placement[] {
   }));
 }
 
+/**
+ * Keep the bench in step with the generated part set.
+ *
+ * Fitting a suppressor or pulling an optic changes which parts exist, so a
+ * placement list built once at boot goes stale: new parts would have nowhere
+ * to sit and removed parts would leave orphans behind. Transforms the user
+ * dragged in are preserved for any part that survives the change. Returns the
+ * original array when nothing moved, so this is safe to run on every render.
+ */
+export function reconcilePlacements(placements: Placement[], parts: GeneratedPart[]): Placement[] {
+  const existing = new Map(placements.map((p) => [p.partId, p]));
+  let changed = placements.length !== parts.length;
+  const next = parts.map((part, i) => {
+    const prev = existing.get(part.id);
+    if (prev) {
+      if (placements[i]?.partId !== part.id) changed = true;
+      return prev;
+    }
+    changed = true;
+    return {
+      key: `k-${part.id}`,
+      partId: part.id,
+      slot: part.slot,
+      x: 0,
+      y: 0,
+      rot: 0,
+      sx: 1,
+      sy: 1,
+      flipX: false,
+      flipY: false,
+      hidden: false,
+      locked: false,
+    };
+  });
+  return changed ? next : placements;
+}
+
 export function newForgeState(): ForgeState {
   return {
     params: { ...DEFAULT_PARAMS },
@@ -89,6 +126,12 @@ export const EXPLODE_DIR: Record<string, [number, number]> = {
   magazine: [-6, 56],
   trigger: [2, -16],
   frame: [0, 0],
+  // attachments fly off along the axis they were fitted on
+  suppressor: [64, -12],
+  compensator: [52, -6],
+  optic: [10, -56],
+  light: [22, 40],
+  beavertail: [-40, 8],
 };
 
 /** Centre of a part's drawn bbox — the pivot for rotation and stretching. */

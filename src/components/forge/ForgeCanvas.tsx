@@ -15,8 +15,39 @@ import type { GeneratedPart } from "@/lib/forge/m1911-model";
 import { EXPLODE_DIR, INK_OPTIONS, partPivot, placementTransform, type ForgeState, type Placement } from "@/lib/forge/types";
 import { cn } from "@/lib/cn";
 
-// The pistol occupies x -2..218, y -21..135 at true millimetre scale.
+// The bare pistol occupies x -2..218, y -21..135 at true millimetre scale, but
+// a fitted suppressor nearly doubles that, so the view is fitted to the parts
+// rather than pinned. This is the fallback and the aspect the canvas keeps.
 const VIEW = { x: -16, y: -32, w: 250, h: 186 };
+const VIEW_PAD = 18;
+
+/** Bounds that hold every generated part, padded, at the canvas aspect. */
+function fitView(parts: GeneratedPart[]) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of parts) {
+    const [x, y, w, h] = p.bbox;
+    if (![x, y, w, h].every(Number.isFinite)) continue;
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x + w);
+    y1 = Math.max(y1, y + h);
+  }
+  if (!Number.isFinite(x0)) return { ...VIEW };
+  x0 -= VIEW_PAD; y0 -= VIEW_PAD; x1 += VIEW_PAD; y1 += VIEW_PAD;
+  const aspect = VIEW.w / VIEW.h;
+  let w = x1 - x0;
+  let h = y1 - y0;
+  if (w / h < aspect) {
+    const nw = h * aspect;
+    x0 -= (nw - w) / 2;
+    w = nw;
+  } else {
+    const nh = w / aspect;
+    y0 -= (nh - h) / 2;
+    h = nh;
+  }
+  return { x: x0, y: y0, w, h };
+}
 const SNAP_RADIUS = 10;
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -41,7 +72,8 @@ export interface ForgeCanvasProps {
 
 export function ForgeCanvas({ parts, state, onChange, onUpdatePlacement, className }: ForgeCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [view, setView] = useState({ x: VIEW.x, y: VIEW.y, zoom: 1 });
+  const fit = useMemo(() => fitView(parts), [parts]);
+  const [view, setView] = useState({ x: fit.x, y: fit.y, zoom: 1 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [snapTarget, setSnapTarget] = useState<string | null>(null);
@@ -55,12 +87,17 @@ export function ForgeCanvas({ parts, state, onChange, onUpdatePlacement, classNa
       if (!svg) return [0, 0];
       const r = svg.getBoundingClientRect();
       return [
-        view.x + ((clientX - r.left) / r.width) * (VIEW.w / view.zoom),
-        view.y + ((clientY - r.top) / r.height) * (VIEW.h / view.zoom),
+        view.x + ((clientX - r.left) / r.width) * (fit.w / view.zoom),
+        view.y + ((clientY - r.top) / r.height) * (fit.h / view.zoom),
       ];
     },
-    [view],
+    [view, fit],
   );
+
+  // Fitting or pulling an attachment changes the extent, so recentre on it.
+  useEffect(() => {
+    setView((v) => ({ ...v, x: fit.x, y: fit.y }));
+  }, [fit]);
 
   const selected = state.placements.find((p) => p.key === state.selectedKey) ?? null;
   const selectedPart = selected ? byId.get(selected.partId) ?? null : null;
@@ -122,8 +159,8 @@ export function ForgeCanvas({ parts, state, onChange, onUpdatePlacement, classNa
         if (!r) return;
         setView((v) => ({
           ...v,
-          x: drag.originView.x - ((e.clientX - drag.startScreen[0]) / r.width) * (VIEW.w / v.zoom),
-          y: drag.originView.y - ((e.clientY - drag.startScreen[1]) / r.height) * (VIEW.h / v.zoom),
+          x: drag.originView.x - ((e.clientX - drag.startScreen[0]) / r.width) * (fit.w / v.zoom),
+          y: drag.originView.y - ((e.clientY - drag.startScreen[1]) / r.height) * (fit.h / v.zoom),
         }));
         return;
       }
@@ -198,7 +235,7 @@ export function ForgeCanvas({ parts, state, onChange, onUpdatePlacement, classNa
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, toCanvas, onUpdatePlacement, state.gridSnap, sockets, snapTarget, byId]);
+  }, [drag, toCanvas, onUpdatePlacement, state.gridSnap, sockets, snapTarget, byId, fit.w, fit.h]);
 
   const onWheel = (e: React.WheelEvent) => {
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
@@ -218,8 +255,8 @@ export function ForgeCanvas({ parts, state, onChange, onUpdatePlacement, classNa
     [state.placements, byId],
   );
 
-  const vw = VIEW.w / view.zoom;
-  const vh = VIEW.h / view.zoom;
+  const vw = fit.w / view.zoom;
+  const vh = fit.h / view.zoom;
   const selBox = selected && selectedPart ? boxOf(selected, selectedPart) : null;
   const hs = 3 / view.zoom;
 
