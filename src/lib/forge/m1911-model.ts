@@ -59,11 +59,11 @@ export const DEFAULT_PARAMS: M1911Params = {
   trigger: "solid",
   beavertail: false,
   gripAngle: 16,
-  gripLength: 101,
+  gripLength: 86,
   gripTexture: "checkered",
-  checkerPitch: 3.2,
+  checkerPitch: 4.4,
   magazine: "standard",
-  dustCover: 150,
+  dustCover: 186,
   lightRail: false,
 };
 
@@ -214,28 +214,37 @@ export interface Geometry {
 }
 
 export function geometry(p: M1911Params): Geometry {
-  // Landmarks measured off Browning's US984,519 plate, then parameterised.
-  const slideRear = 24;
+  // Government Model ground truth: 216 long, 135 tall, slide 199 x 25.4,
+  // barrel 127, grip 54 front-to-back, trigger reach 68 from the backstrap.
+  const slideRear = 17;
   const slideTop = 0;
   const slideBot = p.slideHeight;
-  const muzzleX = slideRear + p.barrelLength + 63.5;
-  const frameBot = slideBot + 32.5;                 // receiver underside at the guard
-  const dustBot = slideBot + 16.5;
-  const tangY = slideBot - (p.beavertail ? 7 : 0) - 0.5;
-  const rad = (p.gripAngle * Math.PI) / 180;
-  const gripDir: Pt = [Math.sin(rad), Math.cos(rad)];
-  // The tang is the rearmost point; the backstrap bows forward then out to
-  // the butt, so the grip is defined by its two real edges.
-  const gripTopRear: Pt = [10, slideBot + 4.5];
-  const gripTopFront: Pt = [88, frameBot - 1.5];
+  const muzzleX = slideRear + p.barrelLength + 72;
+  const dustBot = slideBot + 9.6;                   // dust-cover underside
+  const frameBot = dustBot;                         // frame underside ahead of the guard
+  const tangY = slideBot + 2.1 - (p.beavertail ? 3 : 0);
+
+  // Both grip edges rake down and back, the front strap a little harder than
+  // the backstrap, so the butt sits under the tang and the grip narrows.
+  const rakeB = ((p.gripAngle - 9) * Math.PI) / 180;
+  const rakeF = ((p.gripAngle - 2) * Math.PI) / 180;
+  const gripDir: Pt = [-Math.sin(rakeB), Math.cos(rakeB)];
   const L = p.gripLength;
-  const buttRear: Pt = [14 + (L - 97) * 0.28, slideBot + 4.5 + L];
-  const buttFront: Pt = [75 + (L - 97) * 0.16, slideBot + 4.5 + L];
+  const gripTopRear: Pt = [14, slideBot + 18.6];
+  const gripTopFront: Pt = [68, slideBot + 22.6];
+  const buttRear: Pt = [
+    gripTopRear[0] - L * Math.sin(rakeB),
+    gripTopRear[1] + L * Math.cos(rakeB),
+  ];
+  const buttFront: Pt = [
+    gripTopFront[0] - (L - 11) * Math.sin(rakeF),
+    gripTopFront[1] + (L - 11) * Math.cos(rakeF),
+  ];
   return {
     slideRear, slideTop, slideBot, muzzleX, frameBot, tangY, gripDir,
     gripTopRear, gripTopFront, buttRear, buttFront,
-    guardFront: 131, guardRear: 92, guardBot: frameBot + 13,
-    dustNose: Math.min(p.dustCover, muzzleX - 30),
+    guardFront: 104, guardRear: 81, guardBot: slideBot + 40.6,
+    dustNose: Math.min(p.dustCover, muzzleX - 28),
     dustBot,
   };
 }
@@ -293,11 +302,11 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
       .close().out,
   );
 
-  det.push(path().move([x0 + 1, yB - 6]).line([x1 - 3, yB - 6]).out); // frame parting line
+  det.push(path().move([x0 + 3, yB - 4]).line([x1 - 5, yB - 4]).out); // frame parting line
 
   const n = Math.max(0, Math.round(p.serrations));
-  const sStart = x0 + 8;
-  const sEnd = x0 + 54;
+  const sStart = x0 + 15;
+  const sEnd = x0 + 15 + Math.min(46, (x1 - x0) * 0.24);
   for (let i = 0; i < n; i++) {
     const t = n === 1 ? 0 : i / (n - 1);
     const sx = sStart + (sEnd - sStart) * t;
@@ -310,7 +319,7 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
     }
   }
 
-  if (p.ejectionPort) det.push(box(x0 + 76, yT + 5, 38, 10.5, 2));
+  if (p.ejectionPort) det.push(box(x0 + 99, yT + 4, Math.min(36, (x1 - x0) * 0.19), 10, 2));
 
   if (p.sight === "gi") {
     det.push(path().move([x0 + 5, yT]).line([x0 + 5, yT - 3.4]).line([x0 + 10, yT - 3.4]).line([x0 + 10, yT]).out);
@@ -323,7 +332,8 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
     for (let rx = x0 + 9; rx < x1 - 22; rx += 6) det.push(path().move([rx, yT - 4.6]).line([rx, yT]).out);
   }
 
-  det.push(path().move([x1 - 13, yT + 3]).line([x1 - 13, yB - 3]).out); // bushing seam
+  det.push(circle(x1 - 11, yB * 0.5, yB * 0.33));   // barrel bushing
+  det.push(circle(x1 - 11, yB * 0.5, yB * 0.18));   // muzzle crown
 
   return {
     id: "slide", label: "Slide", slot: "slide", category: "slide",
@@ -335,10 +345,12 @@ function slidePart(p: M1911Params, g: Geometry): GeneratedPart {
 }
 
 function barrelPart(p: M1911Params, g: Geometry): GeneratedPart {
-  const yMid = g.slideBot * 0.44;
+  // The barrel is measured breech face to muzzle, so it sits at the front of
+  // the slide with the breech block behind it.
+  const yMid = g.slideBot * 0.5;
   const rBore = 5.6;
-  const x0 = g.slideRear + 5;
-  const x1 = x0 + p.barrelLength;
+  const x1 = g.muzzleX;
+  const x0 = x1 - p.barrelLength;
   const outline = [
     path()
       .move([x0, yMid - rBore - 2.5])
@@ -350,7 +362,7 @@ function barrelPart(p: M1911Params, g: Geometry): GeneratedPart {
       .close().out,
   ];
   const det = [
-    path().move([x0 + 3, yMid + rBore + 2.5]).line([x0 + 13, yMid + rBore + 8]).line([x0 + 19, yMid + rBore + 2.5]).out,
+    path().move([x0 + 3, yMid + rBore]).line([x0 + 11, yMid + rBore + 4.4]).line([x0 + 19, yMid + rBore]).out, // lower lug
     path().move([x0 + 8, yMid]).line([x1 - 5, yMid]).out,
     circle(x1 - 4, yMid, 2.4),
   ];
@@ -365,94 +377,149 @@ function barrelPart(p: M1911Params, g: Geometry): GeneratedPart {
 
 function framePart(p: M1911Params, g: Geometry): GeneratedPart {
   const {
-    slideBot: yT, frameBot: yB, dustBot, tangY, gripTopFront,
-    buttRear, buttFront, guardFront, guardRear, guardBot, dustNose,
+    slideBot: yb, dustBot, tangY, gripTopRear, gripTopFront,
+    buttRear, buttFront, guardFront: gf, guardBot, dustNose: dn,
   } = g;
-  const tang: Pt = [2, tangY + 1];
+  const tangX = p.beavertail ? 4 : 8;
 
   const outline = [
     path()
-      .move(tang)
-      .curve([tang[0] + 3, tang[1] - 8], [16, yT - 3], [28, yT])           // tang into the rail
-      .line([dustNose, yT])                                                 // rail top
-      .line([dustNose + 4, yT + 5])
-      .line([dustNose + 4, dustBot - 4])
-      .line([dustNose - 3, dustBot])                                        // dust-cover underside
-      .line([guardFront + 8, dustBot])
-      .line([guardFront + 2, yB - 4])
-      .line([guardFront, yB])
-      .curve([guardFront + 1, yB + 7], [guardFront - 4, guardBot], [guardFront - 14, guardBot])
-      .line([guardRear + 8, guardBot])                                      // guard bow
-      .curve([guardRear, guardBot], [gripTopFront[0] - 6, guardBot - 6], [gripTopFront[0], gripTopFront[1]])
-      .line([buttFront[0], buttFront[1]])                                   // front strap
+      .move([tangX, tangY])
+      .curve([tangX + 3, tangY - 1.5], [15, yb], [19.5, yb])                // tang into the rail
+      .line([dn - 2, yb])                                                    // frame rail
+      .curve([dn + 1, yb], [dn + 2, yb + 2], [dn + 2, yb + 5])               // dust-cover nose
+      .line([dn + 2, dustBot - 2])
+      .curve([dn + 2, dustBot], [dn, dustBot], [dn - 3, dustBot])
+      .line([gf + 4, dustBot])                                               // dust-cover underside
+      .curve([gf + 1, dustBot + 2], [gf, dustBot + 5], [gf, dustBot + 9])    // shoulder into the pillar
+      .curve([gf, guardBot - 8], [gf - 5, guardBot], [gf - 14, guardBot])
+      .line([gripTopFront[0] + 13, guardBot])                                // guard bow floor
       .curve(
-        [buttFront[0] - 2, buttFront[1] + 8],
-        [buttRear[0] + 10, buttRear[1] + 7],
-        [buttRear[0], buttRear[1]],
-      )                                                                     // butt
-      .curve([buttRear[0] + 12, buttRear[1] - 34], [26, tang[1] + 34], tang) // backstrap
+        [gripTopFront[0] + 5, guardBot - 0.5],
+        [gripTopFront[0] + 0.5, guardBot - 7],
+        gripTopFront,
+      )
+      .line(buttFront)                                                       // front strap
+      .curve(
+        [buttFront[0] - 1, buttFront[1] + 6],
+        [buttFront[0] - 7, buttFront[1] + 9],
+        [buttFront[0] - 15, buttFront[1] + 9.5],
+      )
+      .line([buttRear[0] + 7, buttRear[1] + 3])                              // butt
+      .curve(
+        [buttRear[0] + 2, buttRear[1] + 3],
+        [buttRear[0] - 1, buttRear[1] + 1],
+        [buttRear[0], buttRear[1] - 4],
+      )
+      .curve(                                                                // mainspring housing
+        [buttRear[0] - 1.5, buttRear[1] - 26],
+        [gripTopRear[0] - 6, gripTopRear[1] + 22],
+        [gripTopRear[0] - 0.5, gripTopRear[1] - 4],
+      )
+      .curve([gripTopRear[0], tangY + 8.5], [tangX + 4, tangY + 3.5], [tangX, tangY])
       .close().out,
-    // trigger guard opening
+    // trigger guard opening: taller at the front, sweeping back to the trigger
     path()
-      .move([guardFront - 6, yB + 1])
-      .curve([guardFront - 5, yB + 7], [guardFront - 10, guardBot - 5], [guardFront - 18, guardBot - 5])
-      .line([guardRear + 10, guardBot - 5])
-      .curve([guardRear + 4, guardBot - 5], [gripTopFront[0] - 8, guardBot - 9], [gripTopFront[0] - 5, gripTopFront[1] + 2])
+      .move([71, yb + 16.6])
+      .line([gf - 10, yb + 16.6])
+      .curve([gf - 6.5, yb + 20.6], [gf - 6, yb + 27.6], [gf - 10, yb + 31.6])
+      .curve([gf - 14, guardBot - 5.5], [gf - 22, guardBot - 5.5], [gf - 27, yb + 33.1])
+      .curve([72.5, yb + 31.1], [70.5, yb + 24.6], [71, yb + 16.6])
       .close().out,
   ];
 
   const det: string[] = [];
-  det.push(path().move([30, yT + 2]).line([dustNose - 3, yT + 2]).out);     // rail line
-  det.push(circle(46, yT + 9, 3));                                          // takedown pin
-  det.push(circle(76, yT + 10, 2));                                         // slide-stop pin
+  det.push(circle(60, yb + 5.6, 4.6));                                       // slide-stop pin
+  det.push(circle(60, yb + 5.6, 1.5));
+  det.push(circle(gf - 7, yb + 5.6, 2.2));                                   // hammer pin
+  det.push(circle(63, yb + 18.6, 3.4));                                      // magazine release
+  // grip-safety seam
+  det.push(path().move([tangX + 5, yb + 4.6]).curve([12, yb + 10.1], [11.5, yb + 15.6], [12.5, yb + 21.6]).out);
+  // thumb safety paddle
+  det.push(
+    path()
+      .move([17, yb + 5.6])
+      .curve([17, yb + 3.1], [20, yb + 2.4], [22, yb + 3.4])
+      .line([34, yb + 4.6])
+      .curve([37, yb + 5.1], [37, yb + 9.1], [34, yb + 9.6])
+      .line([21, yb + 10.6])
+      .curve([18, yb + 10.8], [17, yb + 8.6], [17, yb + 5.6])
+      .close().out,
+  );
   if (p.lightRail) {
-    for (let rx = dustNose - 38; rx < dustNose - 6; rx += 9) det.push(box(rx, dustBot - 3.2, 5.2, 3.2));
-    det.push(path().move([dustNose - 42, dustBot - 3.4]).line([dustNose, dustBot - 3.4]).out);
+    for (let rx = dn - 40; rx < dn - 6; rx += 9) det.push(box(rx, dustBot - 3.2, 5.2, 3.2));
+    det.push(path().move([dn - 44, dustBot - 3.4]).line([dn, dustBot - 3.4]).out);
   }
   if (p.gripTexture !== "smooth") {
     for (let i = 1; i <= 13; i++) {
-      const q = gripPoint(g, 1, 0.1 + i * 0.065);
-      det.push(path().move([q[0] - 3, q[1]]).line([q[0] + 1, q[1] - 1]).out);
+      const q = gripPoint(g, 1, 0.08 + i * 0.065);
+      det.push(path().move([q[0] - 4.2, q[1] + 0.9]).line([q[0] - 0.6, q[1] - 0.7]).out);
     }
   }
 
   return {
     id: "frame", label: "Frame", slot: "frame", category: "frame",
     outline, paths: det,
-    bbox: [0, tangY - 1, dustNose + 4, buttFront[1] + 10 - tangY],
+    bbox: [0, tangY - 1, dn + 2, buttFront[1] + 13 - tangY],
     anchors: {
-      slide: [g.slideRear + 12, yT],
+      slide: [g.slideRear + 12, yb],
       barrel: [g.slideRear + 6, g.slideBot * 0.45],
-      hammer: [14, yT + 1],
-      trigger: [100, yB - 10],
-      gripPanel: gripPoint(g, 0.16, 0.2),
-      magwell: gripPoint(g, 0.3, 0.06),
+      hammer: [16, yb + 3],
+      trigger: [76, yb + 16.6],
+      gripPanel: gripPoint(g, 0.15, 0.06),
+      magwell: gripPoint(g, 0.33, 0.1),
     },
     z: 1,
   };
 }
 
+const PANEL_U: [number, number] = [0.15, 0.85];
+const PANEL_V: [number, number] = [0.06, 0.92];
+
+/**
+ * Diamond checkering. The lines run at 45 degrees in *millimetre* space, not
+ * in patch space, so the diamonds stay square however the grip is raked or
+ * tapered — a straight uv grid shears into parallelograms and reads as mesh.
+ */
+function checkerLines(g: Geometry, pitch: number): string[] {
+  const [u0, u1] = [PANEL_U[0] + 0.06, PANEL_U[1] - 0.06];
+  const [v0, v1] = [PANEL_V[0] + 0.035, PANEL_V[1] - 0.035];
+  const at = (s: number, t: number) => gripPoint(g, u0 + (u1 - u0) * s, v0 + (v1 - v0) * t);
+  const w = Math.hypot(at(1, 0.5)[0] - at(0, 0.5)[0], at(1, 0.5)[1] - at(0, 0.5)[1]);
+  const h = Math.hypot(at(0.5, 1)[0] - at(0.5, 0)[0], at(0.5, 1)[1] - at(0.5, 0)[1]);
+  if (w <= 0 || h <= 0) return [];
+  const m0 = w / h;                                   // dt/ds for a 45-degree line
+  const step = (pitch * Math.SQRT2) / h;
+  const out: string[] = [];
+  for (const sign of [1, -1]) {
+    const m = m0 * sign;
+    const stop = sign > 0 ? 1 : 1 + m0;
+    for (let b = (sign > 0 ? -m0 : 0) + step * 0.5; b < stop; b += step) {
+      const sA = -b / m;
+      const sB = (1 - b) / m;
+      const lo = Math.max(0, Math.min(sA, sB));
+      const hi = Math.min(1, Math.max(sA, sB));
+      if (hi - lo <= 1e-4) continue;
+      out.push(path().move(at(lo, m * lo + b)).line(at(hi, m * hi + b)).out);
+    }
+  }
+  return out;
+}
+
 function gripPanelPart(p: M1911Params, g: Geometry): GeneratedPart {
-  const U0 = 0.2, U1 = 0.8, V0 = 0.22, V1 = 0.84;
+  const [U0, U1] = PANEL_U;
+  const [V0, V1] = PANEL_V;
   const A = gripPoint(g, U0, V0);
   const B = gripPoint(g, U1, V0);
   const C = gripPoint(g, U1, V1);
   const D = gripPoint(g, U0, V1);
-  const outline = [path().move(A).line(B).arc(C, 120, 1).line(D).arc(A, 120, 1).close().out];
+  const outline = [path().move(A).line(B).arc(C, 180, 1).line(D).arc(A, 180, 1).close().out];
   const det: string[] = [];
   const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   const span = Math.hypot(D[0] - A[0], D[1] - A[1]);
   const across = Math.hypot(B[0] - A[0], B[1] - A[1]);
   if (p.gripTexture === "checkered") {
-    const pitch = Math.max(2, p.checkerPitch);
-    for (let d = pitch; d < span - 1; d += pitch) {
-      const t = d / span;
-      det.push(path().move(lerp(A, D, t)).line(lerp(B, C, t)).out);
-    }
-    for (let d = pitch; d < across - 1; d += pitch) {
-      const t = d / across;
-      det.push(path().move(lerp(A, B, t)).line(lerp(D, C, t)).out);
-    }
+    det.push(...checkerLines(g, Math.max(2, p.checkerPitch)));
   } else if (p.gripTexture === "stippled") {
     for (let d = 3; d < span - 2; d += 4) {
       for (let e = 3; e < across - 2; e += 4) {
@@ -461,10 +528,10 @@ function gripPanelPart(p: M1911Params, g: Geometry): GeneratedPart {
       }
     }
   }
-  for (const v of [0.26, 0.74]) {
+  for (const v of [0.3, 0.74]) {
     const q = lerp(lerp(A, B, 0.5), lerp(D, C, 0.5), v);
     det.push(circle(q[0], q[1], 3));
-    det.push(path().move([q[0] - 2, q[1]]).line([q[0] + 2, q[1]]).out);
+    det.push(path().move([q[0] - 2.3, q[1] + 0.9]).line([q[0] + 2.3, q[1] - 0.9]).out);
   }
   const xs = [A[0], B[0], C[0], D[0]];
   const ys = [A[1], B[1], C[1], D[1]];
@@ -481,7 +548,7 @@ const MAG_EXTRA: Record<MagLength, number> = { compact: -12, standard: 0, extend
 
 function magazinePart(p: M1911Params, g: Geometry): GeneratedPart {
   const extra = MAG_EXTRA[p.magazine] / p.gripLength; // as a fraction of the grip
-  const U0 = 0.3, U1 = 0.68, V0 = 0.08, V1 = 0.95 + extra;
+  const U0 = 0.33, U1 = 0.67, V0 = 0.1, V1 = 0.92 + extra;
   const A = gripPoint(g, U0, V0);
   const B = gripPoint(g, U1, V0);
   const C = gripPoint(g, U1, V1);
@@ -490,8 +557,8 @@ function magazinePart(p: M1911Params, g: Geometry): GeneratedPart {
   const det: string[] = [];
   const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   // floorplate, a touch wider than the tube
-  const fA = lerp(D, A, -0.03);
-  const fB = lerp(C, B, -0.03);
+  const fA = lerp(D, A, -0.09);
+  const fB = lerp(C, B, -0.09);
   det.push(path().move(D).line(C).line(fB).line(fA).close().out);
   const holes = p.magazine === "extended" ? 5 : p.magazine === "compact" ? 3 : 4;
   for (let i = 0; i < holes; i++) {
@@ -511,108 +578,80 @@ function magazinePart(p: M1911Params, g: Geometry): GeneratedPart {
 }
 
 function hammerPart(p: M1911Params, g: Geometry): GeneratedPart {
-  const px = 14;
-  const py = g.slideBot + 1;
+  // At full cock. The neck below the tang is covered by the frame; what shows
+  // is the spur, a flat paddle angled up and back over the grip safety.
+  const yb = g.slideBot;
   const outline: string[] = [];
   const det: string[] = [];
   if (p.hammer === "commander") {
     outline.push(path()
-      .move([px - 3, py - 3])
-      .curve([px - 9, py - 13], [px - 2, py - 21], [px + 5, py - 18])
-      .curve([px + 11, py - 15], [px + 8, py - 5], [px + 3, py - 3])
+      .move([20, yb + 5.6])
+      .curve([19, yb - 1], [17, yb - 6], [13, yb - 9.5])
+      .curve([8, yb - 13.5], [1.5, yb - 10], [3, yb - 4])
+      .curve([4.5, yb - 1], [9, yb + 2], [13, yb + 5.6])
       .close().out);
-    det.push(circle(px + 3, py - 14, 3.6));
+    det.push(circle(8.5, yb - 6.5, 3.6));
   } else if (p.hammer === "skeleton") {
     outline.push(path()
-      .move([px - 3, py - 3])
-      .line([px - 6, py - 16]).line([px + 2, py - 22]).line([px + 8, py - 16])
-      .line([px + 4, py - 3]).close().out);
-    det.push(circle(px + 1, py - 14, 4.2));
+      .move([20, yb + 5.6])
+      .curve([19.5, yb + 0.6], [18.5, yb - 3.9], [17.5, yb - 6.4])
+      .line([8, yb - 18.4])
+      .curve([6, yb - 20.2], [3.2, yb - 19], [2.6, yb - 16.6])
+      .curve([2.2, yb - 15.2], [2.5, yb - 14.8], [3, yb - 14.4])
+      .line([12.5, yb - 2.4])
+      .curve([13, yb + 0.6], [13, yb + 3.1], [13, yb + 5.6])
+      .close().out);
+    det.push(circle(8.5, yb - 9, 2.8));
   } else {
     outline.push(path()
-      .move([px - 3, py - 3])
-      .curve([px - 8, py - 12], [px - 6, py - 20], [px + 2, py - 21])
-      .line([px + 9, py - 19]).line([px + 7, py - 15])
-      .curve([px + 6, py - 8], [px + 5, py - 5], [px + 3, py - 3])
+      .move([20, yb + 5.6])
+      .curve([19.5, yb + 0.6], [18.5, yb - 3.9], [17.5, yb - 6.4])   // neck, front edge
+      .line([8, yb - 18.4])                                          // spur top edge
+      .curve([6, yb - 20.2], [3.2, yb - 19], [2.6, yb - 16.6])       // squared tip
+      .curve([2.2, yb - 15.2], [2.5, yb - 14.8], [3, yb - 14.4])
+      .line([12.5, yb - 2.4])                                        // spur underside
+      .curve([13, yb + 0.6], [13, yb + 3.1], [13, yb + 5.6])         // neck, rear edge
       .close().out);
-    for (let i = 0; i < 4; i++) {
-      det.push(path().move([px + 1 + i * 1.8, py - 21 + i * 0.4]).line([px + 2.3 + i * 1.8, py - 18.6 + i * 0.4]).out);
-    }
   }
-  det.push(circle(px, py - 2, 2));
   return {
     id: "hammer", label: "Hammer", slot: "hammer", category: "fireControl",
     outline, paths: det,
-    bbox: [px - 8, py - 23, 20, 23],
-    anchors: { pin: [px, py - 2] },
+    bbox: [2, yb - 21, 19, 27],
+    anchors: { pin: [16, yb + 3] },
     z: 5,
   };
 }
 
 function triggerPart(p: M1911Params, g: Geometry): GeneratedPart {
-  const x = 100;
-  const yT = g.frameBot - 10;         // face starts up inside the frame
-  const yB = g.guardBot - 8;          // hangs down into the guard bow
-  const w = p.trigger === "long" ? 7 : 5.5;
+  // Flat-face shoe hanging at the rear of the guard opening, just ahead of the
+  // magwell — the bow has to clear the magazine, which fixes it there.
+  const x = 72;
+  const yT = g.slideBot + 16.6;       // hangs from the frame, level with the opening
+  const w = p.trigger === "long" ? 9 : 7.5;
+  const yB = yT + (p.trigger === "long" ? 12.5 : 9.5);
   const outline = [
     path()
       .move([x, yT])
       .line([x + w, yT])
-      .line([x + w, yB - 2.5])
-      .arc([x, yB - 2.5], 2.6, 1)
+      .line([x + w, yB])
+      .curve([x + w, yB + 3], [x + w - 2.5, yB + 4.3], [x + w - 4.9, yB + 3.3])
+      .curve([x + 0.8, yB + 2.5], [x, yB + 0.5], [x, yB - 2])
       .close().out,
   ];
   const det: string[] = [];
   if (p.trigger === "skeleton") {
-    det.push(box(x + 1.4, yT + 5, w - 2.8, yB - yT - 11, 1));
+    det.push(box(x + 1.8, yT + 3, w - 3.6, yB - yT - 2, 1));
   } else if (p.trigger === "long") {
     for (let i = 0; i < 4; i++) {
-      det.push(path().move([x + 1, yT + 7 + i * 3]).line([x + w - 1, yT + 7 + i * 3]).out);
+      det.push(path().move([x + 1.2, yT + 3 + i * 2.6]).line([x + w - 1.2, yT + 3 + i * 2.6]).out);
     }
   }
   return {
     id: "trigger", label: "Trigger", slot: "trigger", category: "fireControl",
     outline, paths: det,
-    bbox: [x - 1, yT, w + 3, yB - yT + 2],
+    bbox: [x - 1, yT, w + 3, yB - yT + 6],
     anchors: { pin: [x, yT] },
     z: 4,
-  };
-}
-
-function safetiesPart(p: M1911Params, g: Geometry): GeneratedPart {
-  const yT = g.slideBot;
-  const tangY = g.tangY;
-  const outline: string[] = [];
-  const det: string[] = [];
-
-  // grip-safety tang: one clean blade following the backstrap
-  outline.push(
-    path()
-      .move([6, tangY + 2])
-      .curve([16, tangY + 3], [22, yT + 4], [21, yT + 15])
-      .line([11, yT + 18])
-      .curve([8, yT + 10], [5, yT + 3], [6, tangY + 2])
-      .close().out,
-  );
-
-  // thumb safety: pin boss plus a straight paddle
-  outline.push(
-    path()
-      .move([48, yT + 3])
-      .line([62, yT + 2])
-      .line([63.5, yT + 6])
-      .line([48, yT + 8])
-      .close().out,
-  );
-  det.push(circle(45, yT + 5.5, 2.8));
-  void p;
-
-  return {
-    id: "safeties", label: "Safeties", slot: "safeties", category: "safety",
-    outline, paths: det,
-    bbox: [4, tangY, 60, yT + 20 - tangY],
-    anchors: { pin: [45, yT + 5.5] },
-    z: 6,
   };
 }
 
@@ -626,12 +665,11 @@ export function generateM1911(p: M1911Params): GeneratedPart[] {
     gripPanelPart(p, g),
     triggerPart(p, g),
     hammerPart(p, g),
-    safetiesPart(p, g),
     barrelPart(p, g),
     slidePart(p, g),
   ];
 }
 
 export const PART_ORDER = [
-  "frame", "magazine", "gripPanel", "trigger", "hammer", "safeties", "barrel", "slide",
+  "frame", "magazine", "gripPanel", "trigger", "hammer", "barrel", "slide",
 ];

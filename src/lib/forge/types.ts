@@ -85,7 +85,6 @@ export const EXPLODE_DIR: Record<string, [number, number]> = {
   slide: [4, -46],
   barrel: [30, -24],
   hammer: [-34, -20],
-  safeties: [-30, -6],
   gripPanel: [26, 30],
   magazine: [-6, 56],
   trigger: [2, -16],

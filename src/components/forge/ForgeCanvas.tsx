@@ -15,7 +15,8 @@ import type { GeneratedPart } from "@/lib/forge/m1911-model";
 import { EXPLODE_DIR, INK_OPTIONS, partPivot, placementTransform, type ForgeState, type Placement } from "@/lib/forge/types";
 import { cn } from "@/lib/cn";
 
-const VIEW = { x: -26, y: -34, w: 290, h: 196 };
+// The pistol occupies x -2..218, y -21..135 at true millimetre scale.
+const VIEW = { x: -16, y: -32, w: 250, h: 186 };
 const SNAP_RADIUS = 10;
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
