@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
-import { IconArmory, IconRules, IconWrench } from "@/components/ui/icons";
+import {
+  IconEdit, IconArmory, IconRules, IconWrench } from "@/components/ui/icons";
 
 export interface NavItem {
   href: string;
@@ -14,6 +15,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Fabricator",
     icon: IconWrench,
     blurb: "Spec a pattern part by part while the schematic redraws live.",
+  },
+  {
+    href: "/forge",
+    label: "The Forge",
+    icon: IconEdit,
+    blurb: "Strip a pistol to its parts and mold them on the schematic bench.",
   },
   {
     href: "/armory",
